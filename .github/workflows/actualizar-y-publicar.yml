@@ -1,0 +1,48 @@
+name: Actualizar datos y publicar web
+
+on:
+  schedule:
+    - cron: "17 6 3 * *"   # día 3 de cada mes, 06:17 UTC
+  workflow_dispatch:        # botón "Run workflow" para ejecutarlo a mano
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Descargar datos de UN Comtrade
+        if: github.event_name != 'push'
+        env:
+          COMTRADE_KEY: ${{ secrets.COMTRADE_KEY }}
+        run: python update_comtrade.py
+      - name: Guardar datos nuevos
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "robot-ecokakao"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add imports.json
+          git diff --cached --quiet || git commit -m "Datos UN Comtrade actualizados"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
