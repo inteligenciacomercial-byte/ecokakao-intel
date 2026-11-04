@@ -519,7 +519,7 @@ function viewMarketReal(){
   return `
   <div><div class="eyebrow">${m.pilot?'<span class="chip pilot">● Mercado piloto</span>':'<span class="chip">Prioritario</span>'}<span>${esc(m.region)}</span></div>
     <h2>${esc(m.name)}</h2>
-    <p class="lead">Importaciones oficiales del país por código HS. Describen a ${esc(m.name)} en conjunto, no las compras de una empresa concreta.</p></div>
+    <p class="lead">${d.mirror?"Datos espejo: Rusia no publica sus importaciones, así que estas cifras son lo que el resto de países declara haber exportado a Rusia. Pueden faltar envíos de países que tampoco publican sus datos.":"Importaciones oficiales del país por código HS."} Describen a ${esc(m.name)} en conjunto, no las compras de una empresa concreta.</p></div>
   <div class="filters">${years.map(v=>`<button data-year="${v}" class="${v===y?"on":""}">${v}</button>`).join("")}</div>
   <div class="kpis">
     <div class="kpi"><div class="l">Importación total HS 1801–1806 · ${y}</div><div class="v">${M(tot)} <small>USD M</small></div></div>
@@ -535,7 +535,7 @@ function viewMarketReal(){
   <section><h3>Origen del grano importado (1801) · % del valor</h3>
     ${o.length?`<div class="origins">${o.map(x=>`<div class="origin${x.iso3==="ECU"?" ec":""}"><span>${esc(x.name)}</span><div class="bar"><span style="width:${x.share/omax*100}%"></span></div><span class="pct">${x.share.toFixed(1)}%</span></div>`).join("")}</div>`:'<p class="empty">Sin importaciones de grano registradas este año.</p>'}
   </section>
-  <p class="src"><b>Fuente:</b> <a href="${esc(d.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">UN Comtrade</a>, datos declarados por ${esc(d.reporterDesc)} (importaciones, valor CIF). Actualizado automáticamente el ${esc(d.retrieved)}.</p>
+  <p class="src"><b>Fuente:</b> <a href="${esc(d.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">UN Comtrade</a>, datos declarados por ${esc(d.reporterDesc)} ${d.mirror?"(exportaciones hacia "+esc(m.name)+", valor FOB)":"(importaciones, valor CIF)"}. Actualizado automáticamente el ${esc(d.retrieved)}.</p>
   ${m.pilot?`<button class="cta" data-act="companies">Ver 10 empresas potenciales (demo) <span>→</span></button>`:`<div class="notice info"><b>Empresas y contactos:</b> pendientes para este mercado. El piloto es Turquía.</div>`}`;
 }
 function viewMarketPending(){
