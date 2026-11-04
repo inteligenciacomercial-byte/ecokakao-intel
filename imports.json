@@ -8,7 +8,7 @@
   "1805",
   "1806"
  ],
- "generated": "2026-11-04 19:48 UTC",
+ "generated": "2026-11-04 21:16 UTC",
  "markets": {
   "TUR": {
    "iso3": "TUR",
@@ -5021,6 +5021,250 @@
    },
    "retrieved": "2026-11-04",
    "sourceUrl": "https://comtradeplus.un.org/",
+   "isDemo": false
+  },
+  "RUS": {
+   "iso3": "RUS",
+   "reporterDesc": "los países exportadores",
+   "years": [
+    2023,
+    2024,
+    2025
+   ],
+   "latestYear": 2025,
+   "byYear": {
+    "2023": {
+     "hs": {
+      "1801": {
+       "usd": 85951387,
+       "kg": 29186731
+      },
+      "1803": {
+       "usd": 70904856,
+       "kg": 16315589
+      },
+      "1804": {
+       "usd": 115679447,
+       "kg": 24521420
+      },
+      "1805": {
+       "usd": 158555919,
+       "kg": 50608210
+      },
+      "1806": {
+       "usd": 692658720,
+       "kg": 104214449
+      }
+     },
+     "ecuador": {
+      "1801": {
+       "usd": 5651411,
+       "share": 6.58
+      },
+      "1804": {
+       "usd": 121307,
+       "share": 0.1
+      },
+      "1805": {
+       "usd": 5898,
+       "share": 0.0
+      }
+     },
+     "origins1801": [
+      {
+       "iso3": "CIV",
+       "name": "Côte d'Ivoire",
+       "usd": 54546640,
+       "share": 63.46
+      },
+      {
+       "iso3": "EST",
+       "name": "Estonia",
+       "usd": 23225869,
+       "share": 27.02
+      },
+      {
+       "iso3": "ECU",
+       "name": "Ecuador",
+       "usd": 5651411,
+       "share": 6.58
+      },
+      {
+       "iso3": "TUR",
+       "name": "Türkiye",
+       "usd": 1739680,
+       "share": 2.02
+      },
+      {
+       "iso3": "POL",
+       "name": "Poland",
+       "usd": 278427,
+       "share": 0.32
+      },
+      {
+       "iso3": "BEL",
+       "name": "Belgium",
+       "usd": 163064,
+       "share": 0.19
+      }
+     ]
+    },
+    "2024": {
+     "hs": {
+      "1801": {
+       "usd": 106790211,
+       "kg": 18032523
+      },
+      "1803": {
+       "usd": 197031824,
+       "kg": 23660890
+      },
+      "1804": {
+       "usd": 311612490,
+       "kg": 27163937
+      },
+      "1805": {
+       "usd": 252832152,
+       "kg": 63187949
+      },
+      "1806": {
+       "usd": 600864232,
+       "kg": 82616047
+      }
+     },
+     "ecuador": {
+      "1801": {
+       "usd": 27203170,
+       "share": 25.47
+      },
+      "1803": {
+       "usd": 211679,
+       "share": 0.11
+      },
+      "1804": {
+       "usd": 281658,
+       "share": 0.09
+      }
+     },
+     "origins1801": [
+      {
+       "iso3": "EST",
+       "name": "Estonia",
+       "usd": 58632178,
+       "share": 54.9
+      },
+      {
+       "iso3": "ECU",
+       "name": "Ecuador",
+       "usd": 27203170,
+       "share": 25.47
+      },
+      {
+       "iso3": "TGO",
+       "name": "Togo",
+       "usd": 6603088,
+       "share": 6.18
+      },
+      {
+       "iso3": "CIV",
+       "name": "Côte d'Ivoire",
+       "usd": 5808810,
+       "share": 5.44
+      },
+      {
+       "iso3": "MDG",
+       "name": "Madagascar",
+       "usd": 3328945,
+       "share": 3.12
+      },
+      {
+       "iso3": "UGA",
+       "name": "Uganda",
+       "usd": 2527895,
+       "share": 2.37
+      }
+     ]
+    },
+    "2025": {
+     "hs": {
+      "1801": {
+       "usd": 133401503,
+       "kg": 19359592
+      },
+      "1803": {
+       "usd": 291234185,
+       "kg": 25221952
+      },
+      "1804": {
+       "usd": 446675753,
+       "kg": 62373022
+      },
+      "1805": {
+       "usd": 273481501,
+       "kg": 38586394
+      },
+      "1806": {
+       "usd": 702645438,
+       "kg": 73861035
+      }
+     },
+     "ecuador": {
+      "1801": {
+       "usd": 55562525,
+       "share": 41.65
+      },
+      "1803": {
+       "usd": 189642,
+       "share": 0.07
+      },
+      "1806": {
+       "usd": 2232,
+       "share": 0.0
+      }
+     },
+     "origins1801": [
+      {
+       "iso3": "ECU",
+       "name": "Ecuador",
+       "usd": 55562525,
+       "share": 41.65
+      },
+      {
+       "iso3": "EST",
+       "name": "Estonia",
+       "usd": 32769531,
+       "share": 24.56
+      },
+      {
+       "iso3": "CIV",
+       "name": "Côte d'Ivoire",
+       "usd": 30351421,
+       "share": 22.75
+      },
+      {
+       "iso3": "COL",
+       "name": "Colombia",
+       "usd": 8768213,
+       "share": 6.57
+      },
+      {
+       "iso3": "MDG",
+       "name": "Madagascar",
+       "usd": 2761478,
+       "share": 2.07
+      },
+      {
+       "iso3": "BEL",
+       "name": "Belgium",
+       "usd": 673100,
+       "share": 0.5
+      }
+     ]
+    }
+   },
+   "retrieved": "2026-11-04",
+   "sourceUrl": "https://comtradeplus.un.org/",
+   "mirror": true,
    "isDemo": false
   },
   "USA": {
