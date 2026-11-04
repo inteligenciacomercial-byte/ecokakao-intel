@@ -330,7 +330,7 @@ const TALKING = {
   Operativo:["Puerto de salida y tiempos de tránsito a Turquía.","Incoterms habituales.","Documentación de exportación desde Ecuador."]
 };
 function draftEmail(co,ct){
-  const grano = co.hs.includes("1801");
+  const grano = co.hs ? co.hs.includes("1801") : (co.type==="procesador"||co.type==="trader");
   const product = grano ? "cocoa beans" : "[cocoa product: liquor / butter / powder]";
   const subject = `Ecuadorian ${grano?"cocoa beans":"cocoa products"} for ${co.name}`;
   const body =
@@ -360,7 +360,7 @@ const RESEARCH_STEPS = [
 ];
 
 /* ================= STATE ================= */
-let REAL = {};
+let REAL = {}; let COMPANIES = {};
 const state = {year:null, market:null, view:"market", company:null, tab:"perfil", filter:"todos"};
 let pipeline = [];
 try{ pipeline = JSON.parse(localStorage.getItem("ek_pipeline")||"[]"); }catch(e){ pipeline=[]; }
@@ -536,7 +536,7 @@ function viewMarketReal(){
     ${o.length?`<div class="origins">${o.map(x=>`<div class="origin${x.iso3==="ECU"?" ec":""}"><span>${esc(x.name)}</span><div class="bar"><span style="width:${x.share/omax*100}%"></span></div><span class="pct">${x.share.toFixed(1)}%</span></div>`).join("")}</div>`:'<p class="empty">Sin importaciones de grano registradas este año.</p>'}
   </section>
   <p class="src"><b>Fuente:</b> <a href="${esc(d.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">UN Comtrade</a>, datos declarados por ${esc(d.reporterDesc)} ${d.mirror?"(exportaciones hacia "+esc(m.name)+", valor FOB)":"(importaciones, valor CIF)"}. Actualizado automáticamente el ${esc(d.retrieved)}.</p>
-  ${m.pilot?`<button class="cta" data-act="companies">Ver 10 empresas potenciales (demo) <span>→</span></button>`:`<div class="notice info"><b>Empresas y contactos:</b> pendientes para este mercado. El piloto es Turquía.</div>`}`;
+  ${(()=>{const {list,real}=companiesFor(m); return list.length?`<button class="cta" data-act="companies">Ver ${list.length} empresas potenciales${real?"":" (demo)"} <span>→</span></button>`:`<div class="notice info"><b>Empresas:</b> en investigación para este mercado.</div>`;})()}`;
 }
 function viewMarketPending(){
   const m=state.market;
@@ -549,29 +549,37 @@ function viewMarketPending(){
   <div class="kpis">${HS.map(h=>`<div class="kpi"><div class="l">HS ${h.code} · ${h.cat==="grano"?"grano":"derivado"}</div><div class="v">— <small>sin dato</small></div></div>`).join("")}<div class="kpi"><div class="l">Empresas</div><div class="v">— <small>sin dato</small></div></div></div>
   <button class="ghost" data-act="pilot">Ir al mercado piloto: Turquía</button>`;
 }
+const FIT = {procesador:"Grano (1801): muele cacao para hacer pasta, manteca y polvo.",fabricante:"Sobre todo derivados (1803–1805). Algunos fabricantes también compran grano.",importador:"Grano o derivados, según su cartera.",trader:"Grano (1801) para revender."};
+function companiesFor(m){ const r=COMPANIES[m.iso3]; if(r&&r.length) return {list:r,real:true}; return m.pilot?{list:DEMO_COMPANIES_TR,real:false}:{list:[],real:false}; }
 function viewCompanies(){
-  const list=DEMO_COMPANIES_TR.filter(c=>state.filter==="todos"||c.type===state.filter);
-  const keys=["todos",...Object.keys(TYPES)];
+  const {list:all,real}=companiesFor(state.market);
+  const list=all.filter(c=>state.filter==="todos"||c.type===state.filter);
+  const keys=["todos",...Object.keys(TYPES)].filter(k=>k==="todos"||all.some(c=>c.type===k));
+  const df=real?"":'<span class="demo-flag" style="margin-left:4px">demo</span>';
   return `<div><div class="eyebrow">${esc(state.market.name)} · paso 4 de 9</div><h2>Empresas potenciales</h2>
-    <p class="lead">Diez candidatos clasificados por su papel en la cadena del cacao.</p></div>
-  ${demoNotice("Las diez empresas son ficticias. Las reemplazaremos por empresas reales verificadas, cada una con su fuente.")}
+    <p class="lead">${all.length} empresas clasificadas por su papel en la cadena del cacao.</p></div>
+  ${real?`<div class="notice info"><b>Empresas reales.</b> Cada una tiene su fuente pública en el perfil. Que una empresa esté aquí no significa que compre cacao ecuatoriano: hay que confirmarlo.</div>`:demoNotice("Las diez empresas son ficticias. Las reemplazaremos por empresas reales verificadas, cada una con su fuente.")}
   <div class="filters">${keys.map(k=>`<button data-filter="${k}" class="${state.filter===k?"on":""}">${k==="todos"?"Todas":TYPES[k].label}</button>`).join("")}</div>
-  <div class="list">${list.map(c=>{const i=DEMO_COMPANIES_TR.indexOf(c)+1; return `<button class="item" data-company="${c.id}">
+  <div class="list">${list.map(c=>{const i=all.indexOf(c)+1; return `<button class="item" data-company="${c.id}">
     <span class="n">${String(i).padStart(2,"0")}</span>
-    <span><div class="t">${esc(c.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(c.city)} · HS ${c.hs.join(", ")}</div></span>
+    <span><div class="t">${esc(c.name)}${df}${c.status?` <span class="chip" style="margin-left:4px;color:var(--cacao-yellow);border-color:rgba(232,185,76,.5)">${esc(c.status)}</span>`:""}</div><div class="s">${esc(c.city)}${c.hs?` · HS ${c.hs.join(", ")}`:c.group?` · ${esc(c.group)}`:""}</div></span>
     <span class="chip t-${c.type}">${TYPES[c.type].label}</span></button>`;}).join("")}</div>
   <div class="def"><b style="color:var(--fg)">Por qué separamos tipos:</b> un procesador compra grano; un fabricante suele comprar derivados; un trader revende. El enfoque comercial cambia en cada caso.</div>`;
 }
 function viewCompany(){
-  const c=state.company, t=TYPES[c.type], inPipe=pipeline.some(p=>p.id===c.id);
+  const c=state.company, t=TYPES[c.type], inPipe=pipeline.some(p=>p.id===c.id), real=!c.isDemo;
+  const df=real?"":'<span class="demo-flag">demo</span>';
   const tabs=[["perfil","Perfil"],["contactos","Contactos"],["investigacion","Investigación"],["resumen","Resumen IA"]];
   let body="";
   if(state.tab==="perfil") body=`
     <dl class="dl"><dt>Tipo</dt><dd><span class="chip t-${c.type}">${t.label}</span></dd>
       <dt>Ciudad</dt><dd>${esc(c.city)}</dd>
-      <dt>Códigos HS</dt><dd class="mono">${c.hs.map(h=>{const x=HS.find(z=>z.code===h);return `${h} <span style="color:var(--dim);font-family:var(--f-body)">· ${x.cat}</span>`;}).join("<br>")}</dd>
-      <dt>Web</dt><dd style="color:var(--dim)">Sin dato</dd>
-      <dt>Fuente</dt><dd style="color:var(--dim)">${esc(c.source)}</dd></dl>
+      ${c.group?`<dt>Grupo</dt><dd>${esc(c.group)}</dd>`:""}
+      ${c.status?`<dt>Estado</dt><dd style="color:var(--cacao-yellow)">${esc(c.status)}</dd>`:""}
+      ${c.what?`<dt>Qué hace</dt><dd>${esc(c.what)}</dd>`:""}
+      ${c.hs?`<dt>Códigos HS</dt><dd class="mono">${c.hs.map(h=>{const x=HS.find(z=>z.code===h);return `${h} <span style="color:var(--dim);font-family:var(--f-body)">· ${x.cat}</span>`;}).join("<br>")}</dd>`:`<dt>Encaje estimado</dt><dd>${esc(FIT[c.type])} <span style="color:var(--dim)">(estimación por tipo de empresa, no dato comprobado)</span></dd>`}
+      <dt>Web</dt><dd>${c.web?`<a href="${esc(c.web)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">${esc(c.web.replace(/^https?:\/\//,""))}</a>`:'<span style="color:var(--dim)">Sin dato</span>'}</dd>
+      <dt>Fuente</dt><dd>${c.sourceUrl?`<a href="${esc(c.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">${esc(c.source)}</a>${c.sourceDate?` · ${esc(c.sourceDate)}`:""}`:`<span style="color:var(--dim)">${esc(c.source)}</span>`}</dd></dl>
     <div class="def">${esc(t.def)}</div>
     <section><h3>Contactos clave</h3>
       <div class="list">${contactsFor(c).filter(x=>x.level==="Decisor").map(x=>`<button class="item" data-contact="${x.id}" style="grid-template-columns:36px minmax(0,1fr) auto"><div class="avatar">D</div><span><div class="t">${esc(x.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(x.role)}</div></span><span class="arrow">→</span></button>`).join("")}</div>
@@ -590,26 +598,28 @@ function viewCompany(){
       <span><div class="t">${esc(x.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(x.role)}</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${av(x.email,"Email")}${av(x.linkedin,"LinkedIn")}${av(x.phone,"Teléfono")}</div></span>
       <span class="chip" style="${x.level==="Decisor"?"color:var(--cacao-orange);border-color:rgba(224,122,46,.5)":""}">${x.level}</span></button>`).join("")}</div>
-    <p class="src"><b>Fuente prevista:</b> exportación manual desde Apollo.io, con fecha de consulta. Solo datos profesionales. Turquía aplica la ley KVKK de protección de datos.</p>`;
+    <p class="src"><b>Fuente prevista:</b> exportación manual desde Apollo.io, con fecha de consulta. Solo datos profesionales y según la ley de protección de datos de cada país.</p>`;
   }
   if(state.tab==="investigacion") body=`
     <p class="lead" style="margin:0">Lista de comprobación con fuentes públicas. Las marcas se guardan solo en este navegador.</p>
     <div class="check">${RESEARCH_STEPS.map(([s,u],i)=>{const id=`r_${c.id}_${i}`; let on=false; try{on=localStorage.getItem(id)==="1";}catch(e){}
       return `<label><input type="checkbox" id="${id}" data-check="${id}" ${on?"checked":""}><span>${esc(s)}${u?` <a href="${u}" target="_blank" rel="noopener">${u.replace("https://","")}</a>`:""}</span></label>`;}).join("")}</div>`;
-  if(state.tab==="resumen") body=`
+  if(state.tab==="resumen"){
+    const beans = c.hs ? c.hs.includes("1801") : (c.type==="procesador"||c.type==="trader");
+    body=`
     <div class="notice info"><b>Resumen con plantilla.</b> Se arma a partir de los datos de la ficha. La redacción con IA real llegará en una fase posterior.</div>
-    <div class="summary demo-stripe">
-      <p><b>${esc(c.name)}</b> <span class="demo-flag">demo</span> figura como <b>${t.label.toLowerCase()}</b> en ${esc(c.city)}, Turquía, con actividad en HS ${c.hs.join(", ")}.</p>
-      <p><b>Encaje con ECO-KAKAO:</b> ${c.hs.includes("1801") ? "trabaja con cacao en grano (1801), el producto principal de ECO-KAKAO. Conviene confirmar volúmenes y orígenes actuales." : "trabaja sobre todo con derivados. Hay que confirmar si compra grano o solo producto procesado."}</p>
+    <div class="summary${real?"":" demo-stripe"}">
+      <p><b>${esc(c.name)}</b> ${df} figura como <b>${t.label.toLowerCase()}</b> en ${esc(c.city)}, ${esc(state.market.name)}${c.what?`: ${esc(c.what)}`:"."}</p>
+      <p><b>Encaje con ECO-KAKAO:</b> ${beans ? "por su tipo, es un comprador natural de cacao en grano (1801), el producto principal de ECO-KAKAO. Hay que confirmar volúmenes y orígenes actuales." : "por su tipo, compra sobre todo derivados. Hay que confirmar si también compra grano."}</p>
       <p><b>Próximo paso sugerido:</b> completar la investigación pública y localizar al responsable de compras antes del primer contacto.</p>
-      <p class="src" style="margin-top:8px"><b>Datos verificados:</b> 0 de ${RESEARCH_STEPS.length}.</p></div>`;
-  return `<div><div class="eyebrow"><span class="chip t-${c.type}">${t.label}</span><span class="demo-flag">demo</span></div><h2>${esc(c.name)}</h2>
+      <p class="src" style="margin-top:8px"><b>Fuente de la ficha:</b> ${esc(c.source)}.</p></div>`;
+  }
+  return `<div><div class="eyebrow"><span class="chip t-${c.type}">${t.label}</span>${df}</div><h2>${esc(c.name)}</h2>
     <p class="lead">${esc(c.city)}, ${esc(state.market.name)}</p></div>
   <button class="ghost${inPipe?" on":""}" data-act="pipe">${inPipe?"✓ En oportunidades":"+ Añadir a oportunidades"}</button>
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" class="${state.tab===k?"on":""}">${l}</button>`).join("")}</div>
   ${body}`;
 }
-
 function socialCards(co,ct){
   const n=ct.name.replace(/\D/g,"");
   const ph=(l)=>`<div class="demo-stripe" style="height:84px;border-radius:6px;border:1px dashed var(--line-2);display:grid;place-items:center;font-size:11px;color:var(--muted)">${l}</div>`;
@@ -679,12 +689,12 @@ function bind(){
   b.querySelectorAll("[data-year]").forEach(x=>x.onclick=()=>{state.year=+x.dataset.year;render();});
   b.querySelectorAll("[data-act=pilot]").forEach(x=>x.onclick=()=>openMarket(BY2.TR));
   b.querySelectorAll("[data-filter]").forEach(x=>x.onclick=()=>{state.filter=x.dataset.filter;render();});
-  b.querySelectorAll("[data-company]").forEach(x=>x.onclick=()=>{state.company=DEMO_COMPANIES_TR.find(c=>c.id===x.dataset.company);state.view="company";state.tab="perfil";render();});
+  b.querySelectorAll("[data-company]").forEach(x=>x.onclick=()=>{state.company=companiesFor(state.market).list.find(c=>c.id===x.dataset.company);state.view="company";state.tab="perfil";render();});
   b.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{state.tab=x.dataset.tab;render();});
   b.querySelectorAll("[data-check]").forEach(x=>x.onchange=()=>{try{localStorage.setItem(x.dataset.check,x.checked?"1":"0");}catch(e){}});
   b.querySelectorAll("[data-act=pipe]").forEach(x=>x.onclick=()=>{const c=state.company;
     if(pipeline.some(p=>p.id===c.id)) pipeline=pipeline.filter(p=>p.id!==c.id);
-    else pipeline.push({id:c.id,name:c.name,type:c.type,market:state.market.name,stage:"Identificada",note:"",isDemo:true});
+    else pipeline.push({id:c.id,name:c.name,type:c.type,market:state.market.name,stage:"Identificada",note:"",isDemo:!!c.isDemo});
     savePipe(); render(); renderPipe();});
 }
 
@@ -731,6 +741,7 @@ savePipe();
 
 (async()=>{
   try{ const r=await fetch("imports.json",{cache:"no-store"}); if(r.ok){ const j=await r.json(); REAL=j.markets||{}; markReal(); } }catch(e){}
+  try{ const r2=await fetch("companies.json",{cache:"no-store"}); if(r2.ok){ const j2=await r2.json(); COMPANIES=j2.markets||{}; markReal(); } }catch(e){}
   const geo = await loadGeo();
   if(!geo){ $("#map").innerHTML=`<div class="map-fallback"><div>No se pudo cargar el mapa.<br>Usa el botón <b style="color:var(--fg)">40 mercados</b> de arriba para navegar.</div></div>`; return; }
   features = geo; drawMap();
