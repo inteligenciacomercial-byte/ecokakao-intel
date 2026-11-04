@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>ECO-KAKAO Market Intelligence</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed world map as the stage; slide-in right panel for drill-down; thin top bar */
+:root{
+  --bg:#0b0a09; --surface:#161412; --surface-2:#1f1c19; --line:#2e2a26; --line-2:#3d3833;
+  --fg:#efe8e0; --muted:#9b9189; --dim:#6a625b;
+  --cacao-orange:#e07a2e; --cacao-red:#c9452f; --cacao-yellow:#e8b94c; --cacao-green:#7fa556;
+  --land:#24211e; --land-hover:#332e2a; --market:#5a3a22; --market-hover:#8a5328;
+  --demo:#e8b94c;
+  --f-display:"Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --f-body:"Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--cacao-orange);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* Top bar */
+.top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:20;display:flex;align-items:center;gap:16px;
+  padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:linear-gradient(var(--bg) 40%,transparent);pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand b{font-family:var(--f-display);font-weight:400;font-size:24px;letter-spacing:.01em;white-space:nowrap}
+.brand b i{color:var(--cacao-orange);font-style:italic}
+.brand span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.top .spacer{flex:1}
+.tbtn{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;white-space:nowrap}
+.tbtn:hover{border-color:var(--line-2);background:var(--surface-2)}
+.tbtn .count{font-family:var(--f-mono);font-size:11px;background:var(--cacao-orange);color:#1a0f06;border-radius:999px;padding:1px 7px}
+.demo-flag{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;color:#1a1306;background:var(--demo);border-radius:3px;padding:2px 6px;text-transform:uppercase;white-space:nowrap}
+.demo-stripe{background:repeating-linear-gradient(135deg,rgba(232,185,76,.14) 0 6px,transparent 6px 12px)}
+
+/* Map */
+#map{position:fixed;inset:0}
+#map svg{width:100%;height:100%;display:block}
+.country{fill:var(--land);stroke:var(--bg);stroke-width:.5;vector-effect:non-scaling-stroke;transition:fill .15s}
+.country.market{fill:var(--market);cursor:pointer}
+.country.market:hover,.country.market.hover{fill:var(--market-hover)}
+.country.pilot{fill:var(--cacao-green)}
+.country.pilot:hover{fill:#9cc070}
+.country.active{fill:var(--cacao-orange)!important}
+.graticule{fill:none;stroke:#1a1816;stroke-width:.5;vector-effect:non-scaling-stroke}
+.sphere{fill:#0e0d0c;stroke:var(--line);stroke-width:.6;vector-effect:non-scaling-stroke}
+.dot{cursor:pointer}
+.dot circle{vector-effect:non-scaling-stroke}
+.tip{position:fixed;z-index:30;pointer-events:none;background:var(--surface-2);border:1px solid var(--line-2);border-radius:6px;padding:6px 10px;font-size:12px;white-space:nowrap;transform:translate(-50%,-130%)}
+.tip small{color:var(--muted);margin-left:6px}
+.map-fallback{position:fixed;inset:0;display:grid;place-items:center;padding:24px;color:var(--muted);text-align:center}
+
+/* Hero / legend */
+.hero{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:15;max-width:380px;pointer-events:none}
+.hero h1{font-family:var(--f-display);font-weight:400;font-size:clamp(28px,4vw,44px);line-height:1.02;margin:0 0 10px;text-wrap:balance}
+.hero h1 em{color:var(--cacao-orange)}
+.hero p{color:var(--muted);margin:0 0 14px;line-height:1.5}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);pointer-events:auto}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.zoom{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:15;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:34px;height:34px;border-radius:8px;background:var(--surface);border:1px solid var(--line);font-size:16px}
+.zoom button:hover{background:var(--surface-2)}
+
+/* Panels */
+.panel{position:fixed;top:0;right:0;bottom:0;z-index:25;width:min(480px,100%);background:var(--surface);border-left:1px solid var(--line);
+  transform:translateX(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.panel.open{transform:none;box-shadow:-30px 0 60px rgba(0,0,0,.45)}
+.panel.left{left:0;right:auto;border-left:0;border-right:1px solid var(--line);transform:translateX(-100%)}
+.panel.left.open{transform:none;box-shadow:30px 0 60px rgba(0,0,0,.45)}
+.p-head{display:flex;align-items:center;gap:10px;padding:14px max(20px,env(safe-area-inset-right,0px)) 12px 20px;border-bottom:1px solid var(--line)}
+.panel.left .p-head{padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:20px}
+.crumbs{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px;font-size:12px;color:var(--muted)}
+.crumbs button{background:none;border:0;padding:2px 0;color:var(--muted)}
+.crumbs button:hover{color:var(--fg)}
+.crumbs .sep{color:var(--dim)}
+.crumbs .cur{color:var(--fg)}
+.x{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:transparent;font-size:16px;flex:none}
+.x:hover{background:var(--surface-2)}
+.p-body{flex:1;overflow-y:auto;padding:22px max(20px,env(safe-area-inset-right,0px)) 40px 20px;display:flex;flex-direction:column;gap:22px}
+.p-body>*{flex-shrink:0}
+.panel.left .p-body{padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:20px}
+
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h2{font-family:var(--f-display);font-weight:400;font-size:38px;line-height:1;margin:6px 0 0;text-wrap:balance}
+h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 10px}
+.lead{color:var(--muted);line-height:1.55;margin:8px 0 0}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;border-radius:999px;padding:3px 9px;border:1px solid var(--line-2);color:var(--fg);white-space:nowrap}
+.chip.pilot{border-color:var(--cacao-green);color:var(--cacao-green)}
+.t-procesador{color:var(--cacao-orange);border-color:rgba(224,122,46,.5)}
+.t-fabricante{color:var(--cacao-red);border-color:rgba(201,69,47,.55)}
+.t-importador{color:var(--cacao-green);border-color:rgba(127,165,86,.5)}
+.t-trader{color:var(--cacao-yellow);border-color:rgba(232,185,76,.5)}
+
+.notice{border:1px solid rgba(232,185,76,.35);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.5;color:#e9dcc0}
+.notice b{color:var(--demo)}
+.notice.info{border-color:var(--line-2);color:var(--muted)}
+.notice.info b{color:var(--fg)}
+
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kpi{background:var(--surface);padding:14px}
+.kpi .v{font-family:var(--f-mono);font-size:22px;margin-top:6px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.kpi .v small{font-size:11px;color:var(--muted)}
+.kpi .l{font-size:11px;color:var(--muted);letter-spacing:.04em}
+
+.hs{display:flex;flex-direction:column;gap:2px}
+.hs-group{font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:12px 0 6px;display:flex;align-items:center;gap:8px}
+.hs-group::after{content:"";flex:1;height:1px;background:var(--line)}
+.hs-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:8px 0}
+.hs-row .code{font-family:var(--f-mono);font-size:13px}
+.hs-row .name{font-size:13px;min-width:0}
+.hs-row .val{font-family:var(--f-mono);font-size:13px;text-align:right}
+.hs-row .bar{grid-column:2/4;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.hs-row .bar span{display:block;height:100%;border-radius:3px}
+.src{font-size:11.5px;color:var(--dim);line-height:1.5}
+.src b{color:var(--muted);font-weight:600}
+
+.origins{display:flex;flex-direction:column;gap:8px}
+.origin{display:grid;grid-template-columns:minmax(0,1fr) 110px 44px;gap:10px;align-items:center;font-size:13px}
+.origin .bar{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.origin .bar span{display:block;height:100%;background:var(--cacao-orange)}
+.origin.ec .bar span{background:var(--cacao-green)}
+.origin .pct{font-family:var(--f-mono);text-align:right;color:var(--muted)}
+
+.cta{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--cacao-orange);color:#1a0f06;border:0;border-radius:8px;padding:13px 16px;font-weight:600}
+.cta:hover{background:#ec8a3d}
+.ghost{background:transparent;border:1px solid var(--line-2);border-radius:8px;padding:10px 14px;color:var(--fg)}
+.ghost:hover{background:var(--surface-2)}
+.ghost.on{border-color:var(--cacao-green);color:var(--cacao-green)}
+
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--muted)}
+.filters button.on{background:var(--surface-2);color:var(--fg);border-color:var(--line-2)}
+.list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:14px 4px}
+.item:hover{background:var(--surface-2)}
+.item .n{font-family:var(--f-mono);font-size:11px;color:var(--dim)}
+.item .t{font-weight:600;font-size:14px}
+.item .s{font-size:12px;color:var(--muted);margin-top:3px}
+.item .arrow{color:var(--dim)}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;font-size:13px;color:var(--muted);white-space:nowrap}
+.tabs button.on{color:var(--fg);border-bottom-color:var(--cacao-orange)}
+.dl{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px 14px;font-size:13px;margin:0}
+.dl dt{color:var(--muted)}
+.dl dd{margin:0}
+.def{font-size:12.5px;color:var(--muted);line-height:1.5;border-left:2px solid var(--line-2);padding-left:12px}
+.contact{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--surface-2);border:1px dashed var(--line-2);display:grid;place-items:center;font-size:11px;color:var(--dim)}
+.check{display:flex;flex-direction:column;gap:2px}
+.check label{display:grid;grid-template-columns:18px minmax(0,1fr);gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45;cursor:pointer}
+.check input{accent-color:var(--cacao-orange);margin-top:2px}
+.check a{color:var(--cacao-yellow)}
+.summary{background:var(--surface-2);border-radius:8px;padding:16px;font-size:13.5px;line-height:1.6}
+.summary p{margin:0 0 10px}
+.summary p:last-child{margin:0}
+
+.mlist{display:flex;flex-direction:column}
+.mrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;font-size:14px}
+.mrow:hover{background:var(--surface-2)}
+.mrow small{color:var(--dim);font-size:11px}
+.region{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:16px 0 6px}
+.pipe{display:flex;flex-direction:column;gap:10px}
+.opp{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.opp-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.opp select{background:var(--surface-2);color:var(--fg);border:1px solid var(--line-2);border-radius:6px;padding:6px 8px;font:inherit;font-size:12px}
+.opp textarea{background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;font-size:12.5px;resize:vertical;min-height:54px}
+.linkbtn{background:none;border:0;color:var(--muted);font-size:12px;padding:0}
+.linkbtn:hover{color:var(--cacao-red)}
+.empty{color:var(--muted);line-height:1.6;font-size:13px}
+
+@media (max-width:720px){
+  .brand span{display:none}
+  .hero{max-width:calc(100% - 80px)}
+  .hero p{display:none}
+  h2{font-size:32px}
+  .dl{grid-template-columns:1fr;gap:2px}
+  .dl dd{margin-bottom:8px}
+  .origin{grid-template-columns:minmax(0,1fr) 70px 40px}
+}
+@media (max-width:460px){ .tbtn .lbl{display:none} }
+@media (prefers-reduced-motion:reduce){ .panel{transition:none} .country{transition:none} }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>ECO<i>·</i>KAKAO</b><span>Market Intelligence</span></div>
+  <div class="spacer"></div>
+  <span class="demo-flag" title="Las cifras, empresas y contactos de esta versión son ficticios">Versión demo</span>
+  <button class="tbtn" id="btnMarkets" aria-label="Ver los 40 mercados">◎ <span class="lbl">40 mercados</span></button>
+  <button class="tbtn" id="btnPipe" aria-label="Ver oportunidades">◆ <span class="lbl">Oportunidades</span> <span class="count" id="pipeCount">0</span></button>
+</header>
+
+<div id="map" aria-label="Mapa mundial de mercados"></div>
+<div class="tip" id="tip" hidden></div>
+
+<div class="hero" id="hero">
+  <h1>Dónde se compra <em>cacao</em> en el mundo</h1>
+  <p>Selecciona uno de los 40 mercados prioritarios. Turquía es el mercado piloto.</p>
+  <div class="legend">
+    <span><i style="background:var(--cacao-green)"></i>Piloto</span>
+    <span><i style="background:var(--market)"></i>Prioritario</span>
+    <span><i style="background:var(--land)"></i>Otros</span>
+  </div>
+</div>
+<div class="zoom">
+  <button id="zin" aria-label="Acercar">+</button>
+  <button id="zout" aria-label="Alejar">−</button>
+  <button id="zreset" aria-label="Ver mundo completo">⟲</button>
+</div>
+
+<aside class="panel" id="panel" aria-label="Detalle del mercado">
+  <div class="p-head"><nav class="crumbs" id="crumbs"></nav><button class="x" id="closePanel" aria-label="Cerrar panel">✕</button></div>
+  <div class="p-body" id="pbody"></div>
+</aside>
+
+<aside class="panel left" id="mpanel" aria-label="Lista de mercados">
+  <div class="p-head"><div class="crumbs"><span class="cur">Mercados prioritarios · lista provisional</span></div><button class="x" id="closeM" aria-label="Cerrar lista">✕</button></div>
+  <div class="p-body" id="mbody"></div>
+</aside>
+
+<aside class="panel" id="ppanel" aria-label="Oportunidades">
+  <div class="p-head"><div class="crumbs"><span class="cur">Oportunidades de seguimiento</span></div><button class="x" id="closeP" aria-label="Cerrar oportunidades">✕</button></div>
+  <div class="p-body" id="pipeBody"></div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+/* ================= DATA ================= */
+/* Lista PROVISIONAL de 40 mercados (pendiente de validar por ECO-KAKAO). */
+const MARKETS = [
+ ["TR","TUR","Turquía","Europa y Asia Central",35.2,39,true],
+ ["NL","NLD","Países Bajos","Europa",5.3,52.1],["DE","DEU","Alemania","Europa",10.4,51.1],["BE","BEL","Bélgica","Europa",4.5,50.6],
+ ["FR","FRA","Francia","Europa",2.4,46.6],["IT","ITA","Italia","Europa",12.6,42.8],["ES","ESP","España","Europa",-3.7,40.2],
+ ["GB","GBR","Reino Unido","Europa",-2,53.5],["CH","CHE","Suiza","Europa",8.2,46.8],["PL","POL","Polonia","Europa",19.4,52.1],
+ ["EE","EST","Estonia","Europa",25.5,58.7],["AT","AUT","Austria","Europa",14.5,47.6],["CZ","CZE","Chequia","Europa",15.3,49.8],
+ ["SE","SWE","Suecia","Europa",15.6,61.5],["DK","DNK","Dinamarca","Europa",9.5,56],["FI","FIN","Finlandia","Europa",26,63.5],
+ ["IE","IRL","Irlanda","Europa",-8,53.3],["PT","PRT","Portugal","Europa",-8.2,39.6],["GR","GRC","Grecia","Europa",22,39.3],
+ ["UA","UKR","Ucrania","Europa y Asia Central",31.2,49],["RU","RUS","Rusia","Europa y Asia Central",60,58],
+ ["US","USA","Estados Unidos","Américas",-98,39],["CA","CAN","Canadá","Américas",-100,57],["MX","MEX","México","Américas",-102,23.6],
+ ["BR","BRA","Brasil","Américas",-52,-10],["AR","ARG","Argentina","Américas",-64,-34],["CO","COL","Colombia","Américas",-73,4],
+ ["CL","CHL","Chile","Américas",-71,-33],
+ ["JP","JPN","Japón","Asia-Pacífico",138,36.5],["CN","CHN","China","Asia-Pacífico",104,35],["KR","KOR","Corea del Sur","Asia-Pacífico",127.8,36.4],
+ ["MY","MYS","Malasia","Asia-Pacífico",102,4.2],["ID","IDN","Indonesia","Asia-Pacífico",117,-2.5],["SG","SGP","Singapur","Asia-Pacífico",103.82,1.35],
+ ["IN","IND","India","Asia-Pacífico",79,22],["AU","AUS","Australia","Asia-Pacífico",134,-25],
+ ["SA","SAU","Arabia Saudita","Oriente Medio y África",45,24],["AE","ARE","Emiratos Árabes Unidos","Oriente Medio y África",54.3,24],
+ ["EG","EGY","Egipto","Oriente Medio y África",30,26.5],["ZA","ZAF","Sudáfrica","Oriente Medio y África",24,-29]
+].map(([iso2,iso3,name,region,lon,lat,pilot])=>({iso2,iso3,name,region,lon,lat,pilot:!!pilot}));
+const BY2 = Object.fromEntries(MARKETS.map(m=>[m.iso2,m]));
+const BY3 = Object.fromEntries(MARKETS.map(m=>[m.iso3,m]));
+
+const HS = [
+ {code:"1801",name:"Cacao en grano, entero o partido, crudo o tostado",cat:"grano"},
+ {code:"1803",name:"Pasta o licor de cacao",cat:"derivado"},
+ {code:"1804",name:"Manteca, grasa y aceite de cacao",cat:"derivado"},
+ {code:"1805",name:"Cacao en polvo sin azúcar",cat:"derivado"},
+ {code:"1806",name:"Chocolate y preparaciones con cacao",cat:"derivado"}
+];
+
+/* DEMO: cifras FICTICIAS de importaciones del país Turquía. Sustituir por UN Comtrade / TÜİK. */
+const DEMO_IMPORTS_TR = {
+  isDemo:true, year:"Año de prueba", unit:"USD millones",
+  source:"Ninguna — cifras inventadas para probar el diseño",
+  plannedSource:"UN Comtrade (reporter: Turquía, flujo: importación) y TÜİK",
+  rows:{"1801":{usd:240,t:48000},"1803":{usd:42,t:6100},"1804":{usd:75,t:9800},"1805":{usd:55,t:14200},"1806":{usd:160,t:31000}},
+  origins1801:[["Côte d'Ivoire",38],["Ghana",22],["Ecuador",14,true],["Nigeria",11],["Camerún",9],["Otros",6]]
+};
+
+const TYPES = {
+  procesador:{label:"Procesador",def:"Muele cacao en grano (1801) y produce pasta, manteca o polvo (1803–1805). Comprador natural de grano ecuatoriano."},
+  fabricante:{label:"Fabricante",def:"Elabora chocolate y productos finales (1806). Puede comprar grano o, más a menudo, derivados ya procesados."},
+  importador:{label:"Importador",def:"Trae el producto al país y lo distribuye a industria o comercio. No necesariamente transforma."},
+  trader:{label:"Trader",def:"Compra y revende cacao sin transformarlo. Puede operar desde otro país sin que la mercancía pase por Turquía."}
+};
+
+/* DEMO: 10 empresas FICTICIAS. Nombres genéricos a propósito. */
+const DEMO_COMPANIES_TR = [
+ ["a","Empresa Demo A","procesador","Estambul",["1801","1803","1804"]],
+ ["b","Empresa Demo B","procesador","Gebze, Kocaeli",["1801","1804","1805"]],
+ ["c","Empresa Demo C","procesador","Esmirna",["1801","1805"]],
+ ["d","Empresa Demo D","fabricante","Estambul",["1804","1805","1806"]],
+ ["e","Empresa Demo E","fabricante","Bursa",["1801","1806"]],
+ ["f","Empresa Demo F","fabricante","Gaziantep",["1805","1806"]],
+ ["g","Empresa Demo G","importador","Mersin",["1801","1803"]],
+ ["h","Empresa Demo H","importador","Estambul",["1804","1805"]],
+ ["i","Empresa Demo I","trader","Estambul",["1801"]],
+ ["j","Empresa Demo J","trader","Ankara",["1801","1803"]]
+].map(([id,name,type,city,hs])=>({id,name,type,city,hs,isDemo:true,source:"Ficticio — sin fuente"}));
+
+/* Cargos del lado COMPRADOR. El Sales Manager de la empresa vende, no compra cacao. */
+const KEY_ROLES = [
+ {role:"Purchasing Manager",level:"Decisor",why:"Negocia precio, volumen y selección de proveedores."},
+ {role:"Head of Raw Materials Sourcing",level:"Decisor",why:"Decide los orígenes del grano y de los derivados."},
+ {role:"Procurement Director",level:"Decisor",why:"Aprueba contratos y la entrada de proveedores nuevos."},
+ {role:"Quality Assurance Manager",level:"Influye",why:"Valida muestras, fermentación, humedad y certificaciones."},
+ {role:"Supply Chain Manager",level:"Operativo",why:"Gestiona logística, aduanas e importación."}
+];
+const LEVEL_ORDER = {Decisor:0,Influye:1,Operativo:2};
+function contactsFor(c){
+  const seed=c.id.charCodeAt(0);
+  return KEY_ROLES.map((r,i)=>({
+    id:`${c.id}${i}`, name:`Contacto demo ${i+1}`, ...r,
+    email: (seed+i)%3!==0, linkedin: true, phone: (seed+i)%5===0,
+    tenure: `${2+((seed+i)%7)} años en el cargo`, linkedinUrl:null, xUrl:null, isDemo:true
+  }));
+}
+const PRO_CONTEXT = {
+  Decisor:["Publicó en LinkedIn sobre trazabilidad en la cadena de suministro.","Asistió a una feria internacional de confitería.","Su empresa anunció una ampliación de capacidad de producción."],
+  Influye:["Comparte contenido sobre control de calidad y seguridad alimentaria.","Participó en un webinar sobre normativa EUDR y deforestación.","Su equipo busca proveedores con certificaciones verificables."],
+  Operativo:["Publica sobre optimización logística y tiempos de importación.","Su empresa trabaja con puertos de Mersin y Estambul.","Interés profesional en reducir costes de flete."]
+};
+const TALKING = {
+  Decisor:["Diversificar orígenes frente a la concentración en África Occidental.","Trazabilidad desde finca hasta puerto.","Muestras y condiciones para un primer lote de prueba."],
+  Influye:["Ficha técnica: humedad, fermentación y tamaño de grano.","Certificaciones disponibles de ECO-KAKAO.","Envío de muestras para análisis de laboratorio."],
+  Operativo:["Puerto de salida y tiempos de tránsito a Turquía.","Incoterms habituales.","Documentación de exportación desde Ecuador."]
+};
+function draftEmail(co,ct){
+  const grano = co.hs.includes("1801");
+  const product = grano ? "cocoa beans" : "[cocoa product: liquor / butter / powder]";
+  const subject = `Ecuadorian ${grano?"cocoa beans":"cocoa products"} for ${co.name}`;
+  const body =
+`Hi [First name],
+
+I'm [Your name], International Sales at ECO-KAKAO, a cocoa company based in Ecuador.
+
+I noticed ${co.name} works with ${grano?"cocoa beans":"cocoa derivatives"} in ${co.city}, and I thought there could be a good fit. We supply ${product} with [key strength: traceability / certification / flavour profile] and can ship to Turkey from [port].
+
+${ct.level==="Influye"?"I'd be happy to send you our technical sheet and a sample for your lab.":"Would you be open to a short call next week to see if our cocoa could fit your sourcing plans? I can also send samples."}
+
+Best regards,
+[Your name]
+International Sales · ECO-KAKAO
+[Phone] · [Website]`;
+  return {subject,body};
+}
+
+const RESEARCH_STEPS = [
+ ["Web corporativa: productos, capacidad, certificaciones (orgánico, Fairtrade, Rainforest).",null],
+ ["Registro mercantil turco: razón social exacta y dirección.","https://www.ticaretsicil.gov.tr"],
+ ["Ranking ISO 500 (grandes industriales de Turquía).","https://www.iso500.org.tr"],
+ ["Página de empresa en LinkedIn: tamaño y empleados en compras.","https://www.linkedin.com"],
+ ["Contactos en Apollo.io (cargar a mano, solo datos profesionales).","https://www.apollo.io"],
+ ["Importaciones del país por código HS en UN Comtrade.","https://comtradeplus.un.org"],
+ ["Comparar con ITC Trade Map.","https://www.trademap.org"]
+];
+
+/* ================= STATE ================= */
+let REAL = {};
+const state = {year:null, market:null, view:"market", company:null, tab:"perfil", filter:"todos"};
+let pipeline = [];
+try{ pipeline = JSON.parse(localStorage.getItem("ek_pipeline")||"[]"); }catch(e){ pipeline=[]; }
+function savePipe(){ try{ localStorage.setItem("ek_pipeline",JSON.stringify(pipeline)); }catch(e){} document.getElementById("pipeCount").textContent = pipeline.length; }
+
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n=>n.toLocaleString("es-EC");
+
+/* ================= MAP ================= */
+let svg,g,path,projection,zoom,features=[];
+function marketOf(f){ return BY2[f.properties.iso2] || BY3[f.properties.iso3] || null; }
+
+function normalizeAm(geo){
+  // amCharts geodata: id = ISO2. Ajusta orientación de anillos para d3.
+  return geo.features.filter(f=>f.id!=="AQ").map(f=>{
+    const polys = f.geometry.type==="Polygon"?[f.geometry.coordinates]:f.geometry.coordinates;
+    const fixed = polys.map(p=>{
+      let ring=p[0];
+      if(d3.geoArea({type:"Polygon",coordinates:[ring]})>2*Math.PI) ring=ring.slice().reverse();
+      return [ring];
+    });
+    return {type:"Feature",properties:{iso2:f.id,iso3:null,name:f.properties.name},geometry:{type:"MultiPolygon",coordinates:fixed}};
+  });
+}
+function loadScript(src){ return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
+async function loadGeo(){
+  const am=["https://cdn.jsdelivr.net/npm/@amcharts/amcharts4-geodata@4.1.31/dist/script/worldLow.js",
+            "https://unpkg.com/@amcharts/amcharts4-geodata@4.1.31/dist/script/worldLow.js"];
+  for(const u of am){ try{ await loadScript(u); if(window.am4geodata_worldLow) return normalizeAm(window.am4geodata_worldLow);}catch(e){} }
+  try{
+    await loadScript("https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/datamaps@0.5.9/dist/datamaps.world.min.js");
+    const topo = window.Datamap && window.Datamap.prototype.worldTopo;
+    if(topo){ return topojson.feature(topo,topo.objects.world).features.filter(f=>f.id!=="ATA"&&f.id!=="-99")
+      .map(f=>({type:"Feature",properties:{iso2:null,iso3:f.id,name:f.properties.name},geometry:f.geometry})); }
+  }catch(e){}
+  return null;
+}
+
+function drawMap(){
+  const el=$("#map"); const w=el.clientWidth, h=el.clientHeight;
+  projection = d3.geoNaturalEarth1().fitExtent([[20,70],[w-20,h-20]],{type:"Sphere"});
+  path = d3.geoPath(projection);
+  svg = d3.select(el).append("svg").attr("viewBox",`0 0 ${w} ${h}`).attr("preserveAspectRatio","xMidYMid meet");
+  g = svg.append("g");
+  g.append("path").attr("class","sphere").attr("d",path({type:"Sphere"}));
+  g.append("path").attr("class","graticule").attr("d",path(d3.geoGraticule10()));
+  const tip=$("#tip");
+  const present=new Set();
+  g.selectAll(".country").data(features).join("path")
+    .attr("class",f=>{const m=marketOf(f); if(m) present.add(m.iso2); return "country"+(m?" market":"")+(m&&m.pilot?" pilot":"");})
+    .attr("d",path)
+    .on("mousemove",(ev,f)=>{const m=marketOf(f); tip.hidden=false; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px";
+       tip.innerHTML=esc(m?m.name:f.properties.name)+(m?`<small>${m.pilot?"Piloto":"Prioritario"}</small>`:"");})
+    .on("mouseleave",()=>{tip.hidden=true;})
+    .on("click",(ev,f)=>{const m=marketOf(f); if(m) openMarket(m);});
+  // Mercados pequeños sin geometría visible: punto
+  const dots = MARKETS.filter(m=>!present.has(m.iso2)||m.iso2==="SG");
+  const dg=g.selectAll(".dot").data(dots).join("g").attr("class","dot")
+    .attr("transform",m=>`translate(${projection([m.lon,m.lat])})`)
+    .on("mousemove",(ev,m)=>{tip.hidden=false;tip.style.left=ev.clientX+"px";tip.style.top=ev.clientY+"px";tip.innerHTML=esc(m.name)+"<small>Prioritario</small>";})
+    .on("mouseleave",()=>tip.hidden=true).on("click",(ev,m)=>openMarket(m));
+  dg.append("circle").attr("r",4).attr("fill","var(--market-hover)").attr("stroke","var(--cacao-orange)").attr("stroke-width",1);
+  zoom = d3.zoom().scaleExtent([1,12]).translateExtent([[0,0],[w,h]]).on("zoom",ev=>{g.attr("transform",ev.transform); dg.selectAll("circle").attr("r",4/ev.transform.k);});
+  svg.call(zoom).on("dblclick.zoom",null);
+  $("#zin").onclick=()=>svg.transition().duration(300).call(zoom.scaleBy,1.6);
+  $("#zout").onclick=()=>svg.transition().duration(300).call(zoom.scaleBy,1/1.6);
+  $("#zreset").onclick=resetZoom;
+}
+function markReal(){
+  const flag=document.querySelector(".top .demo-flag");
+  if(Object.keys(REAL).length && flag){ flag.textContent="Comercio: datos reales"; flag.style.background="var(--cacao-green)"; }
+  if(state.market && $("#panel").classList.contains("open") && state.view==="market") render();
+}
+function resetZoom(){ if(svg) svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity); }
+function focusMarket(m){
+  if(!svg) return;
+  g.selectAll(".country").classed("active",f=>marketOf(f)===m);
+  const el=$("#map"); const w=el.clientWidth,h=el.clientHeight;
+  const panelW = w>720 ? Math.min(480,w) : 0;
+  const f = features.find(f=>marketOf(f)===m);
+  let [[x0,y0],[x1,y1]] = f ? path.bounds(f) : (()=>{const p=projection([m.lon,m.lat]);return [[p[0]-10,p[1]-10],[p[0]+10,p[1]+10]];})();
+  if(m.iso2==="RU"||m.iso2==="US"||m.iso2==="CA"){ const p=projection([m.lon,m.lat]); x0=p[0]-90;x1=p[0]+90;y0=p[1]-60;y1=p[1]+60; }
+  const availW = w-panelW;
+  const k = Math.min(8, 0.55/Math.max((x1-x0)/availW,(y1-y0)/h));
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(availW/2 - k*cx, h/2 - k*cy).scale(k));
+}
+
+/* ================= PANEL VIEWS ================= */
+function crumbs(){
+  const m=state.market, c=state.company; const parts=[[ "Mundo","world"],[m.name,"market"]];
+  if(state.view!=="market") parts.push(["Empresas","companies"]);
+  if(state.view==="company"||state.view==="contact") parts.push([c.name,"company"]);
+  if(state.view==="contact") parts.push([state.contact.name,"contact"]);
+  $("#crumbs").innerHTML = parts.map(([t,v],i)=> i===parts.length-1 ? `<span class="cur">${esc(t)}</span>` : `<button data-go="${v}">${esc(t)}</button><span class="sep">›</span>`).join("");
+  $("#crumbs").querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{const v=b.dataset.go; if(v==="world") closePanel(); else {state.view=v; if(v==="company" && state.contact) state.tab="contactos"; render();}});
+}
+function render(){
+  crumbs();
+  const b=$("#pbody");
+  if(state.view==="market") b.innerHTML = REAL[state.market.iso3] ? viewMarketReal() : (state.market.pilot ? viewMarketTR() : viewMarketPending());
+  if(state.view==="companies") b.innerHTML = viewCompanies();
+  if(state.view==="company") b.innerHTML = viewCompany();
+  if(state.view==="contact") b.innerHTML = viewContact();
+  b.scrollTop=0; bind();
+}
+function demoNotice(text){ return `<div class="notice demo-stripe"><b>DATOS DE DEMOSTRACIÓN.</b> ${text}</div>`; }
+
+function viewMarketTR(){
+  const d=DEMO_IMPORTS_TR, rows=d.rows;
+  const total=Object.values(rows).reduce((a,r)=>a+r.usd,0);
+  const grano=rows["1801"].usd, max=Math.max(...Object.values(rows).map(r=>r.usd));
+  const row = h=>{const r=rows[h.code]; const col=h.cat==="grano"?"var(--cacao-orange)":"var(--cacao-yellow)";
+    return `<div class="hs-row"><span class="code">${h.code}</span><span class="name">${esc(h.name)}</span><span class="val">${r.usd} <span style="color:var(--dim)">M</span></span>
+      <div class="bar"><span style="width:${r.usd/max*100}%;background:${col}"></span></div></div>`;};
+  return `
+  <div><div class="eyebrow"><span class="chip pilot">● Mercado piloto</span><span>${esc(state.market.region)}</span></div>
+    <h2>${esc(state.market.name)}</h2>
+    <p class="lead">Importaciones del país por código HS. Estas cifras describen a Turquía en conjunto, no las compras de ninguna empresa concreta.</p></div>
+  ${demoNotice("Todas las cifras de este panel son ficticias. Sirven solo para probar el diseño. No usar para decisiones.")}
+  <div class="kpis demo-stripe">
+    <div class="kpi"><div class="l">Importación total HS 1801–1806</div><div class="v">${total} <small>USD M</small><span class="demo-flag">demo</span></div></div>
+    <div class="kpi"><div class="l">Peso del grano (1801)</div><div class="v">${Math.round(grano/total*100)}% <small>del total</small><span class="demo-flag">demo</span></div></div>
+  </div>
+  <section><h3>Desglose por código HS · ${d.unit}</h3>
+    <div class="hs">
+      <div class="hs-group" style="color:var(--cacao-orange)">Cacao en grano</div>${HS.filter(h=>h.cat==="grano").map(row).join("")}
+      <div class="hs-group" style="color:var(--cacao-yellow)">Derivados</div>${HS.filter(h=>h.cat==="derivado").map(row).join("")}
+    </div>
+    <p class="src"><b>Fuente:</b> ${esc(d.source)}.<br><b>Fuente prevista:</b> ${esc(d.plannedSource)}.</p>
+  </section>
+  <section><h3>Origen del grano importado (1801) · % del valor</h3>
+    <div class="origins">${d.origins1801.map(([n,p,ec])=>`<div class="origin${ec?" ec":""}"><span>${esc(n)}${ec?' <span class="chip pilot" style="padding:1px 6px">Ecuador</span>':""}</span><div class="bar"><span style="width:${p/40*100}%"></span></div><span class="pct">${p}%</span></div>`).join("")}</div>
+    <p class="src" style="margin-top:10px"><b>Fuente:</b> ficticia. <span class="demo-flag">demo</span></p>
+  </section>
+  <button class="cta" data-act="companies">Ver 10 empresas potenciales <span>→</span></button>`;
+}
+function viewMarketReal(){
+  const m=state.market, d=REAL[m.iso3], years=d.years;
+  const y = years.includes(state.year) ? state.year : d.latestYear;
+  const Y=d.byYear[String(y)], prev=d.byYear[String(y-1)];
+  const hs=Y.hs, tot=HS.reduce((a,h)=>a+((hs[h.code]||{}).usd||0),0);
+  const ptot=prev?HS.reduce((a,h)=>a+((prev.hs[h.code]||{}).usd||0),0):0;
+  const max=Math.max(1,...HS.map(h=>(hs[h.code]||{}).usd||0));
+  const M=v=>(v/1e6).toLocaleString("es-EC",{maximumFractionDigits:1});
+  const T=kg=>kg?Math.round(kg/1000).toLocaleString("es-EC")+" t":"— t";
+  const grano=(hs["1801"]||{}).usd||0;
+  const ec=Y.ecuador||{};
+  const row=h=>{const r=hs[h.code]||{usd:0,kg:0};const col=h.cat==="grano"?"var(--cacao-orange)":"var(--cacao-yellow)";
+    return `<div class="hs-row"><span class="code">${h.code}</span><span class="name">${esc(h.name)}<br><span class="src">${T(r.kg)}${ec[h.code]?` · Ecuador ${ec[h.code].share.toFixed(1)}%`:""}</span></span><span class="val">${M(r.usd)} <span style="color:var(--dim)">M</span></span>
+      <div class="bar"><span style="width:${r.usd/max*100}%;background:${col}"></span></div></div>`;};
+  const o=Y.origins1801||[], omax=Math.max(1,...o.map(x=>x.share));
+  const yoy = ptot ? ((tot-ptot)/ptot*100) : null;
+  return `
+  <div><div class="eyebrow">${m.pilot?'<span class="chip pilot">● Mercado piloto</span>':'<span class="chip">Prioritario</span>'}<span>${esc(m.region)}</span></div>
+    <h2>${esc(m.name)}</h2>
+    <p class="lead">Importaciones oficiales del país por código HS. Describen a ${esc(m.name)} en conjunto, no las compras de una empresa concreta.</p></div>
+  <div class="filters">${years.map(v=>`<button data-year="${v}" class="${v===y?"on":""}">${v}</button>`).join("")}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Importación total HS 1801–1806 · ${y}</div><div class="v">${M(tot)} <small>USD M</small></div></div>
+    <div class="kpi"><div class="l">Peso del grano (1801)</div><div class="v">${tot?Math.round(grano/tot*100):0}% <small>del total</small></div></div>
+    <div class="kpi"><div class="l">Variación vs ${y-1}</div><div class="v">${yoy===null?"—":(yoy>0?"+":"")+yoy.toFixed(1)+"%"} <small>en valor</small></div></div>
+    <div class="kpi"><div class="l">Cuota de Ecuador en grano</div><div class="v">${ec["1801"]?ec["1801"].share.toFixed(1)+"%":"0%"} <small>${ec["1801"]?M(ec["1801"].usd)+" USD M":"sin envíos"}</small></div></div>
+  </div>
+  <section><h3>Desglose por código HS · USD millones</h3>
+    <div class="hs">
+      <div class="hs-group" style="color:var(--cacao-orange)">Cacao en grano</div>${HS.filter(h=>h.cat==="grano").map(row).join("")}
+      <div class="hs-group" style="color:var(--cacao-yellow)">Derivados</div>${HS.filter(h=>h.cat==="derivado").map(row).join("")}
+    </div></section>
+  <section><h3>Origen del grano importado (1801) · % del valor</h3>
+    ${o.length?`<div class="origins">${o.map(x=>`<div class="origin${x.iso3==="ECU"?" ec":""}"><span>${esc(x.name)}</span><div class="bar"><span style="width:${x.share/omax*100}%"></span></div><span class="pct">${x.share.toFixed(1)}%</span></div>`).join("")}</div>`:'<p class="empty">Sin importaciones de grano registradas este año.</p>'}
+  </section>
+  <p class="src"><b>Fuente:</b> <a href="${esc(d.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">UN Comtrade</a>, datos declarados por ${esc(d.reporterDesc)} (importaciones, valor CIF). Actualizado automáticamente el ${esc(d.retrieved)}.</p>
+  ${m.pilot?`<button class="cta" data-act="companies">Ver 10 empresas potenciales (demo) <span>→</span></button>`:`<div class="notice info"><b>Empresas y contactos:</b> pendientes para este mercado. El piloto es Turquía.</div>`}`;
+}
+function viewMarketPending(){
+  const m=state.market;
+  return `<div><div class="eyebrow"><span class="chip">Prioritario</span><span>${esc(m.region)}</span></div><h2>${esc(m.name)}</h2>
+    <p class="lead">Mercado incluido en la lista provisional. UN Comtrade todavía no tiene datos de este país para los últimos años, o el robot aún no se ha ejecutado.</p></div>
+  <div class="notice info"><b>Pendiente.</b> Para activar este mercado necesitamos:<br>
+    1. Importaciones del país por HS 1801–1806 (UN Comtrade o Trade Map).<br>
+    2. Una lista de empresas verificadas con su fuente.<br>
+    3. Contactos exportados desde Apollo.io.</div>
+  <div class="kpis">${HS.map(h=>`<div class="kpi"><div class="l">HS ${h.code} · ${h.cat==="grano"?"grano":"derivado"}</div><div class="v">— <small>sin dato</small></div></div>`).join("")}<div class="kpi"><div class="l">Empresas</div><div class="v">— <small>sin dato</small></div></div></div>
+  <button class="ghost" data-act="pilot">Ir al mercado piloto: Turquía</button>`;
+}
+function viewCompanies(){
+  const list=DEMO_COMPANIES_TR.filter(c=>state.filter==="todos"||c.type===state.filter);
+  const keys=["todos",...Object.keys(TYPES)];
+  return `<div><div class="eyebrow">${esc(state.market.name)} · paso 4 de 9</div><h2>Empresas potenciales</h2>
+    <p class="lead">Diez candidatos clasificados por su papel en la cadena del cacao.</p></div>
+  ${demoNotice("Las diez empresas son ficticias. Las reemplazaremos por empresas reales verificadas, cada una con su fuente.")}
+  <div class="filters">${keys.map(k=>`<button data-filter="${k}" class="${state.filter===k?"on":""}">${k==="todos"?"Todas":TYPES[k].label}</button>`).join("")}</div>
+  <div class="list">${list.map(c=>{const i=DEMO_COMPANIES_TR.indexOf(c)+1; return `<button class="item" data-company="${c.id}">
+    <span class="n">${String(i).padStart(2,"0")}</span>
+    <span><div class="t">${esc(c.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(c.city)} · HS ${c.hs.join(", ")}</div></span>
+    <span class="chip t-${c.type}">${TYPES[c.type].label}</span></button>`;}).join("")}</div>
+  <div class="def"><b style="color:var(--fg)">Por qué separamos tipos:</b> un procesador compra grano; un fabricante suele comprar derivados; un trader revende. El enfoque comercial cambia en cada caso.</div>`;
+}
+function viewCompany(){
+  const c=state.company, t=TYPES[c.type], inPipe=pipeline.some(p=>p.id===c.id);
+  const tabs=[["perfil","Perfil"],["contactos","Contactos"],["investigacion","Investigación"],["resumen","Resumen IA"]];
+  let body="";
+  if(state.tab==="perfil") body=`
+    <dl class="dl"><dt>Tipo</dt><dd><span class="chip t-${c.type}">${t.label}</span></dd>
+      <dt>Ciudad</dt><dd>${esc(c.city)}</dd>
+      <dt>Códigos HS</dt><dd class="mono">${c.hs.map(h=>{const x=HS.find(z=>z.code===h);return `${h} <span style="color:var(--dim);font-family:var(--f-body)">· ${x.cat}</span>`;}).join("<br>")}</dd>
+      <dt>Web</dt><dd style="color:var(--dim)">Sin dato</dd>
+      <dt>Fuente</dt><dd style="color:var(--dim)">${esc(c.source)}</dd></dl>
+    <div class="def">${esc(t.def)}</div>
+    <section><h3>Contactos clave</h3>
+      <div class="list">${contactsFor(c).filter(x=>x.level==="Decisor").map(x=>`<button class="item" data-contact="${x.id}" style="grid-template-columns:36px minmax(0,1fr) auto"><div class="avatar">D</div><span><div class="t">${esc(x.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(x.role)}</div></span><span class="arrow">→</span></button>`).join("")}</div>
+      <button class="ghost" data-tab="contactos" style="margin-top:10px">Ver los 5 contactos</button></section>`;
+  if(state.tab==="contactos"){
+    const cs=contactsFor(c).sort((a,b)=>LEVEL_ORDER[a.level]-LEVEL_ORDER[b.level]);
+    const nDec=cs.filter(x=>x.level==="Decisor").length, nMail=cs.filter(x=>x.email).length;
+    const av=(on,l)=>`<span class="chip" style="${on?"border-color:var(--cacao-green);color:var(--cacao-green)":"color:var(--dim);border-color:var(--line)"}">${on?"✓":"—"} ${l}</span>`;
+    body=`
+    ${demoNotice("Personas ficticias. Los reales vendrán de tu exportación de Apollo.io.")}
+    <div class="kpis"><div class="kpi"><div class="l">Decisores de compra</div><div class="v">${nDec} <small>de ${cs.length}</small></div></div>
+      <div class="kpi"><div class="l">Con email disponible</div><div class="v">${nMail} <small>de ${cs.length}</small></div></div></div>
+    <div class="def">Buscamos el lado <b style="color:var(--fg)">comprador</b>: compras, abastecimiento y calidad. El Sales Manager de esta empresa vende sus productos y no decide la compra de cacao.</div>
+    <div class="list">${cs.map(x=>`<button class="item" data-contact="${x.id}" style="grid-template-columns:36px minmax(0,1fr) auto">
+      <div class="avatar">${x.level[0]}</div>
+      <span><div class="t">${esc(x.name)} <span class="demo-flag" style="margin-left:4px">demo</span></div><div class="s">${esc(x.role)}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${av(x.email,"Email")}${av(x.linkedin,"LinkedIn")}${av(x.phone,"Teléfono")}</div></span>
+      <span class="chip" style="${x.level==="Decisor"?"color:var(--cacao-orange);border-color:rgba(224,122,46,.5)":""}">${x.level}</span></button>`).join("")}</div>
+    <p class="src"><b>Fuente prevista:</b> exportación manual desde Apollo.io, con fecha de consulta. Solo datos profesionales. Turquía aplica la ley KVKK de protección de datos.</p>`;
+  }
+  if(state.tab==="investigacion") body=`
+    <p class="lead" style="margin:0">Lista de comprobación con fuentes públicas. Las marcas se guardan solo en este navegador.</p>
+    <div class="check">${RESEARCH_STEPS.map(([s,u],i)=>{const id=`r_${c.id}_${i}`; let on=false; try{on=localStorage.getItem(id)==="1";}catch(e){}
+      return `<label><input type="checkbox" id="${id}" data-check="${id}" ${on?"checked":""}><span>${esc(s)}${u?` <a href="${u}" target="_blank" rel="noopener">${u.replace("https://","")}</a>`:""}</span></label>`;}).join("")}</div>`;
+  if(state.tab==="resumen") body=`
+    <div class="notice info"><b>Resumen con plantilla.</b> Se arma a partir de los datos de la ficha. La redacción con IA real llegará en una fase posterior.</div>
+    <div class="summary demo-stripe">
+      <p><b>${esc(c.name)}</b> <span class="demo-flag">demo</span> figura como <b>${t.label.toLowerCase()}</b> en ${esc(c.city)}, Turquía, con actividad en HS ${c.hs.join(", ")}.</p>
+      <p><b>Encaje con ECO-KAKAO:</b> ${c.hs.includes("1801") ? "trabaja con cacao en grano (1801), el producto principal de ECO-KAKAO. Conviene confirmar volúmenes y orígenes actuales." : "trabaja sobre todo con derivados. Hay que confirmar si compra grano o solo producto procesado."}</p>
+      <p><b>Próximo paso sugerido:</b> completar la investigación pública y localizar al responsable de compras antes del primer contacto.</p>
+      <p class="src" style="margin-top:8px"><b>Datos verificados:</b> 0 de ${RESEARCH_STEPS.length}.</p></div>`;
+  return `<div><div class="eyebrow"><span class="chip t-${c.type}">${t.label}</span><span class="demo-flag">demo</span></div><h2>${esc(c.name)}</h2>
+    <p class="lead">${esc(c.city)}, ${esc(state.market.name)}</p></div>
+  <button class="ghost${inPipe?" on":""}" data-act="pipe">${inPipe?"✓ En oportunidades":"+ Añadir a oportunidades"}</button>
+  <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" class="${state.tab===k?"on":""}">${l}</button>`).join("")}</div>
+  ${body}`;
+}
+
+function socialCards(co,ct){
+  const n=ct.name.replace(/\D/g,"");
+  const ph=(l)=>`<div class="demo-stripe" style="height:84px;border-radius:6px;border:1px dashed var(--line-2);display:grid;place-items:center;font-size:11px;color:var(--muted)">${l}</div>`;
+  const post=(txt,img,meta)=>`<div style="border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;line-height:1.5">${esc(txt)}</div>${img?ph(img):""}<div class="src">${meta}</div></div>`;
+  const P=PRO_CONTEXT[ct.level];
+  const li=`<div class="opp"><div class="opp-top"><div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="border-style:solid;background:#0a66c2;color:#fff;border-color:#0a66c2;font-weight:700">in</div>
+      <div><div style="font-weight:600">${esc(ct.name)} <span class="demo-flag">demo</span></div><div class="src" style="color:var(--muted)">${esc(ct.role)} en ${esc(co.name)} · ${esc(co.city)}</div></div></div>
+      <span class="src">500+ conexiones</span></div>
+    ${post(P[0],"Imagen demo · gráfico de cadena de suministro","Hace 2 semanas · 48 reacciones · demo")}
+    ${post(P[1],"Imagen demo · stand en feria del sector","Hace 1 mes · 112 reacciones · demo")}
+    <div class="src"><b>Temas que publica:</b> ${ct.level==="Decisor"?"compras, sostenibilidad, materias primas":ct.level==="Influye"?"calidad, seguridad alimentaria, normativa":"logística, importación, costes"} · demo</div></div>`;
+  const hasX=(n%2)===1;
+  const x=hasX?`<div class="opp"><div class="opp-top"><div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="border-style:solid;background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:700">X</div>
+      <div><div style="font-weight:600">@contacto_demo_${n} <span class="demo-flag">demo</span></div><div class="src" style="color:var(--muted)">Usa X para temas del sector</div></div></div></div>
+    ${post("Comentó un informe sobre la subida del precio del cacao en el mercado internacional.",null,"Hace 5 días · demo")}
+    ${post(P[2],null,"Hace 3 semanas · demo")}</div>`
+   :`<div class="opp"><div class="src">X / Twitter: no se encontró cuenta profesional · demo</div></div>`;
+  return li+x;
+}
+function viewContact(){
+  const co=state.company, ct=state.contact;
+  const d=state.draft;
+  const gmail = d ? `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}` : "";
+  return `<div><div class="eyebrow"><span class="chip" style="${ct.level==="Decisor"?"color:var(--cacao-orange);border-color:rgba(224,122,46,.5)":""}">${ct.level}</span><span class="demo-flag">demo</span></div>
+    <h2>${esc(ct.name)}</h2><p class="lead">${esc(ct.role)} · ${esc(co.name)}, ${esc(co.city)}</p></div>
+  ${demoNotice("Persona y datos ficticios. Esta ficha usa solo información profesional y pública.")}
+  <dl class="dl">
+    <dt>Por qué importa</dt><dd>${esc(ct.why)}</dd>
+    <dt>Antigüedad</dt><dd>${esc(ct.tenure)}</dd>
+    <dt>Email corporativo</dt><dd style="${ct.email?"":"color:var(--dim)"}">${ct.email?"Disponible en Apollo (oculto en la demo)":"Sin dato"}</dd>
+    <dt>LinkedIn</dt><dd style="${ct.linkedin?"":"color:var(--dim)"}">${ct.linkedin?"Perfil encontrado":"Sin dato"}</dd>
+    <dt>Teléfono</dt><dd style="${ct.phone?"":"color:var(--dim)"}">${ct.phone?"Disponible en Apollo":"Sin dato"}</dd>
+  </dl>
+  <section><h3>Perfiles profesionales</h3>
+    <div style="display:flex;flex-direction:column;gap:10px">${socialCards(co,ct)}</div>
+    <p class="src" style="margin-top:8px">Vista demo. Con datos reales, cada tarjeta tendrá el enlace al perfil exacto (columnas <span class="mono">LinkedIn URL</span> y <span class="mono">Twitter URL</span> de Apollo).</p></section>
+  <section><h3>Contexto profesional</h3>
+    <div class="check">${PRO_CONTEXT[ct.level].map(s=>`<div style="padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45">${esc(s)} <span class="demo-flag">demo</span></div>`).join("")}</div>
+    <p class="src" style="margin-top:8px"><b>Fuentes previstas:</b> perfil de LinkedIn, web corporativa, notas de prensa y listas de expositores de ferias.</p></section>
+  <section><h3>Puntos de conversación</h3>
+    <div class="summary">${TALKING[ct.level].map(s=>`<p>→ ${esc(s)}</p>`).join("")}</div></section>
+  <button class="cta" data-act="draft">${d?"Volver a generar borrador":"Crear borrador de email"} <span>✉</span></button>
+  ${d?`<section style="display:flex;flex-direction:column;gap:10px">
+    <h3 style="margin:0">Borrador · cold approach</h3>
+    <label class="src" for="dsub"><b>Asunto</b></label>
+    <input id="dsub" data-draft="subject" value="${esc(d.subject)}" style="background:var(--surface-2);color:var(--fg);border:1px solid var(--line-2);border-radius:6px;padding:9px 10px;font:inherit;font-size:13px">
+    <label class="src" for="dbody"><b>Mensaje</b> · edita los campos entre [corchetes]</label>
+    <textarea id="dbody" data-draft="body" style="background:var(--surface-2);color:var(--fg);border:1px solid var(--line-2);border-radius:6px;padding:12px;font:inherit;font-size:13px;line-height:1.55;min-height:320px;resize:vertical">${esc(d.body)}</textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ghost" data-act="copy" id="copyBtn">Copiar texto</button>
+      <a class="ghost" id="gmailLink" href="${gmail}" target="_blank" rel="noopener" style="text-decoration:none">Abrir en Gmail ↗</a>
+    </div>
+    <p class="src">Gmail abre un correo nuevo con este texto. Revísalo y añade el destinatario antes de enviar.</p>
+  </section>`:""}`;
+}
+
+function bind(){
+  const b=$("#pbody");
+  b.querySelectorAll("[data-contact]").forEach(x=>x.onclick=()=>{state.contact=contactsFor(state.company).find(k=>k.id===x.dataset.contact);state.draft=null;state.view="contact";render();});
+  b.querySelectorAll("[data-act=draft]").forEach(x=>x.onclick=()=>{state.draft=draftEmail(state.company,state.contact);render();setTimeout(()=>{const t=$("#dbody");if(t)t.scrollIntoView({behavior:"smooth",block:"center"});},50);});
+  b.querySelectorAll("[data-draft]").forEach(x=>x.oninput=()=>{state.draft[x.dataset.draft]=x.value;
+    const a=$("#gmailLink"); if(a) a.href=`https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(state.draft.subject)}&body=${encodeURIComponent(state.draft.body)}`;});
+  b.querySelectorAll("[data-act=copy]").forEach(x=>x.onclick=()=>{const txt=`Subject: ${state.draft.subject}\n\n${state.draft.body}`;
+    const ok=()=>{x.textContent="Copiado ✓";setTimeout(()=>x.textContent="Copiar texto",1600);};
+    try{navigator.clipboard.writeText(txt).then(ok,()=>{$("#dbody").select();x.textContent="Texto seleccionado";});}catch(e){$("#dbody").select();}});
+  b.querySelectorAll("[data-act=companies]").forEach(x=>x.onclick=()=>{state.view="companies";render();});
+  b.querySelectorAll("[data-year]").forEach(x=>x.onclick=()=>{state.year=+x.dataset.year;render();});
+  b.querySelectorAll("[data-act=pilot]").forEach(x=>x.onclick=()=>openMarket(BY2.TR));
+  b.querySelectorAll("[data-filter]").forEach(x=>x.onclick=()=>{state.filter=x.dataset.filter;render();});
+  b.querySelectorAll("[data-company]").forEach(x=>x.onclick=()=>{state.company=DEMO_COMPANIES_TR.find(c=>c.id===x.dataset.company);state.view="company";state.tab="perfil";render();});
+  b.querySelectorAll("[data-tab]").forEach(x=>x.onclick=()=>{state.tab=x.dataset.tab;render();});
+  b.querySelectorAll("[data-check]").forEach(x=>x.onchange=()=>{try{localStorage.setItem(x.dataset.check,x.checked?"1":"0");}catch(e){}});
+  b.querySelectorAll("[data-act=pipe]").forEach(x=>x.onclick=()=>{const c=state.company;
+    if(pipeline.some(p=>p.id===c.id)) pipeline=pipeline.filter(p=>p.id!==c.id);
+    else pipeline.push({id:c.id,name:c.name,type:c.type,market:state.market.name,stage:"Identificada",note:"",isDemo:true});
+    savePipe(); render(); renderPipe();});
+}
+
+function openMarket(m){
+  state.market=m; state.view="market"; state.company=null; state.filter="todos";
+  closeSide("#mpanel"); closeSide("#ppanel");
+  $("#panel").classList.add("open"); $("#hero").hidden = innerWidth<=720;
+  render(); focusMarket(m);
+}
+function closePanel(){ $("#panel").classList.remove("open"); $("#hero").hidden=false; if(g) g.selectAll(".country").classed("active",false); resetZoom(); }
+function closeSide(s){ $(s).classList.remove("open"); }
+
+/* Markets list */
+function renderMarkets(){
+  const regions=[...new Set(MARKETS.map(m=>m.region))];
+  $("#mbody").innerHTML = `<div class="notice info"><b>Lista provisional.</b> Propuesta basada en grandes importadores y procesadores de cacao. ECO-KAKAO debe validarla.</div>
+   <div class="mlist">${regions.map(r=>`<div class="region">${esc(r)}</div>`+MARKETS.filter(m=>m.region===r).map(m=>
+     `<button class="mrow" data-m="${m.iso2}"><span>${esc(m.name)}</span>${m.pilot?'<span class="chip pilot">Piloto</span>':(REAL[m.iso3]?'<small style="color:var(--cacao-green)">Datos reales</small>':'<small>Sin datos</small>')}</button>`).join("")).join("")}</div>`;
+  $("#mbody").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>openMarket(BY2[b.dataset.m]));
+}
+/* Pipeline */
+const STAGES=["Identificada","Investigando","Contactada","En conversación","Descartada"];
+function renderPipe(){
+  const el=$("#pipeBody");
+  if(!pipeline.length){ el.innerHTML=`<div><h2 style="font-size:30px">Sin oportunidades</h2><p class="empty">Abre una empresa y pulsa “Añadir a oportunidades”. Aquí podrás marcar en qué etapa está cada una y añadir notas.</p></div>
+    <div class="notice info"><b>Dónde se guarda:</b> por ahora, solo en este navegador. Más adelante lo pasaremos a una base de datos compartida.</div>`; return; }
+  el.innerHTML = `<div class="notice info"><b>Dónde se guarda:</b> solo en este navegador por ahora.</div><div class="pipe">${pipeline.map((p,i)=>`
+    <div class="opp"><div class="opp-top"><div><div style="font-weight:600">${esc(p.name)} ${p.isDemo?'<span class="demo-flag">demo</span>':""}</div><div class="src" style="color:var(--muted)">${esc(p.market)} · ${TYPES[p.type].label}</div></div>
+      <select id="st_${p.id}" data-stage="${i}" aria-label="Etapa">${STAGES.map(s=>`<option${s===p.stage?" selected":""}>${s}</option>`).join("")}</select></div>
+      <textarea id="nt_${p.id}" data-note="${i}" placeholder="Notas de seguimiento">${esc(p.note)}</textarea>
+      <button class="linkbtn" data-del="${i}" style="align-self:flex-start">Quitar</button></div>`).join("")}</div>`;
+  el.querySelectorAll("[data-stage]").forEach(s=>s.onchange=()=>{pipeline[+s.dataset.stage].stage=s.value;savePipe();});
+  el.querySelectorAll("[data-note]").forEach(s=>s.oninput=()=>{pipeline[+s.dataset.note].note=s.value;savePipe();});
+  el.querySelectorAll("[data-del]").forEach(s=>s.onclick=()=>{pipeline.splice(+s.dataset.del,1);savePipe();renderPipe(); if(state.view==="company") render();});
+}
+
+$("#closePanel").onclick=closePanel;
+$("#closeM").onclick=()=>closeSide("#mpanel");
+$("#closeP").onclick=()=>closeSide("#ppanel");
+$("#btnMarkets").onclick=()=>{renderMarkets(); closeSide("#ppanel"); $("#mpanel").classList.add("open");};
+$("#btnPipe").onclick=()=>{renderPipe(); closeSide("#mpanel"); $("#ppanel").classList.add("open");};
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if($("#ppanel").classList.contains("open")) closeSide("#ppanel"); else if($("#mpanel").classList.contains("open")) closeSide("#mpanel"); else closePanel(); }});
+savePipe();
+
+(async()=>{
+  try{ const r=await fetch("imports.json",{cache:"no-store"}); if(r.ok){ const j=await r.json(); REAL=j.markets||{}; markReal(); } }catch(e){}
+  const geo = await loadGeo();
+  if(!geo){ $("#map").innerHTML=`<div class="map-fallback"><div>No se pudo cargar el mapa.<br>Usa el botón <b style="color:var(--fg)">40 mercados</b> de arriba para navegar.</div></div>`; return; }
+  features = geo; drawMap();
+})();
+let rt; addEventListener("resize",()=>{clearTimeout(rt); rt=setTimeout(()=>{ if(!features.length) return; $("#map").innerHTML=""; drawMap(); if(state.market && $("#panel").classList.contains("open")) focusMarket(state.market); },200);});
+</script>
+
+</body>
+</html>
