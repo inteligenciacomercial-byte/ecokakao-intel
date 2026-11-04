@@ -171,6 +171,73 @@ def build_market(iso3, code, years):
     }
 
 
+def build_mirror(iso3, code, years):
+    """Datos espejo: lo que el resto de países declara haber EXPORTADO a este mercado.
+    Se usa cuando el país no publica sus propias importaciones (p. ej. Rusia)."""
+    params = {
+        "partnerCode": code,
+        "period": ",".join(str(y) for y in years),
+        "flowCode": "X",
+        "cmdCode": ",".join(HS),
+        "partner2Code": 0,
+        "customsCode": "C00",
+        "motCode": 0,
+        "includeDesc": "true",
+    }
+    data = get_json(API, params)
+    rows = [r for r in (data.get("data") or [])
+            if is_total_row(r) and str(r.get("reporterCode")) not in ("0", "97")]
+    by_year = {}
+    for y in years:
+        yr = [r for r in rows if str(r.get("period")) == str(y)]
+        if not yr:
+            continue
+        hs = {}
+        for c in HS:
+            cr = [r for r in yr if str(r.get("cmdCode")) == c]
+            hs[c] = {"usd": round(sum(float(r.get("primaryValue") or 0) for r in cr)),
+                     "kg": round(sum(float(r.get("netWgt") or 0) for r in cr))}
+        ecuador = {}
+        for c in HS:
+            usd = sum(float(r.get("primaryValue") or 0) for r in yr
+                      if str(r.get("cmdCode")) == c and r.get("reporterISO") == "ECU")
+            if usd > 0 and hs[c]["usd"] > 0:
+                ecuador[c] = {"usd": round(usd), "share": round(usd / hs[c]["usd"] * 100, 2)}
+        origins = []
+        tot = hs["1801"]["usd"]
+        if tot > 0:
+            agg = {}
+            for r in yr:
+                if str(r.get("cmdCode")) != "1801":
+                    continue
+                k = r.get("reporterISO") or str(r.get("reporterCode"))
+                a = agg.setdefault(k, {"iso3": k, "name": r.get("reporterDesc") or k, "usd": 0})
+                a["usd"] += float(r.get("primaryValue") or 0)
+            ranked = sorted(agg.values(), key=lambda a: -a["usd"])
+            top = ranked[:6]
+            if "ECU" in agg and all(t["iso3"] != "ECU" for t in top):
+                top.append(agg["ECU"])
+            for t in top:
+                origins.append({"iso3": t["iso3"], "name": t["name"], "usd": round(t["usd"]),
+                                "share": round(t["usd"] / tot * 100, 2)})
+        if sum(v["usd"] for v in hs.values()) > 0:
+            by_year[str(y)] = {"hs": hs, "ecuador": ecuador, "origins1801": origins}
+    if not by_year:
+        return None
+    ys = sorted(int(y) for y in by_year)
+    return {
+        "iso3": iso3,
+        "reporterDesc": "los países exportadores",
+        "years": ys,
+        "latestYear": ys[-1],
+        "byYear": by_year,
+        "retrieved": datetime.date.today().isoformat(),
+        "sourceUrl": "https://comtradeplus.un.org/",
+        "mirror": True,
+        "isDemo": False,
+    }
+
+
 def main():
     if not KEY:
         sys.exit("Falta la clave COMTRADE_KEY (añádela en GitHub > Settings > Secrets).")
@@ -189,9 +256,12 @@ def main():
     for iso3 in MARKETS:
         try:
             m = build_market(iso3, codes[iso3], years)
+            if not m:  # el país no publica sus importaciones: usar datos espejo
+                time.sleep(2)
+                m = build_mirror(iso3, codes[iso3], years)
             if m:
                 markets[iso3] = m
-                log.append(f"{iso3}: ok ({', '.join(map(str, m['years']))})")
+                log.append(f"{iso3}: ok{' (datos espejo)' if m.get('mirror') else ''} ({', '.join(map(str, m['years']))})")
             elif iso3 in previous:
                 markets[iso3] = previous[iso3]  # conservar lo anterior
                 log.append(f"{iso3}: sin datos nuevos, se conserva lo anterior")
