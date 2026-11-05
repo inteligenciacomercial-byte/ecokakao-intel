@@ -57,11 +57,13 @@ function parseEuromonitor(wb){
 }
 
 const COLS = {
-  name:/importador|importer|consignee|consignatario|raz[oó]n social|^empresa|company/i,
-  usd:/(valor|value|fob|cif|monto).*(us|usd|\$|d[oó]lar)|^(us\$|usd)|valor (fob|cif)|^fob|^cif|valor/i,
+  name:/comprador|buyer|importador|importer|consignee|consignatario|raz[oó]n social|^empresa|company/i,
+  usd:/u\$s|us\$|usd|fob|cif|valor|value|monto/i,
+  exporter:/^exportador|exporter|shipper|embarcador/i,
+  dest:/destino|destination/i,
   kg:/peso neto|net weight|peso|kg|kilo|cantidad|quantity|toneladas|tons/i,
   date:/fecha|date|per[ií]odo|^mes|month/i,
-  origin:/pa[ií]s de origen|origen|origin|procedencia|pa[ií]s de procedencia/i,
+  origin:/pa[ií]s de origen|^origen$|^origin$|^country of origin|pa[ií]s de procedencia|^procedencia$/i,
   hs:/posici[oó]n|partida|ncm|hs|arancel|nandina|tariff/i
 };
 function parsePenta(wb){
@@ -72,19 +74,26 @@ function parsePenta(wb){
       if(idx.name!=null&&(idx.usd!=null||idx.kg!=null)){ best={name,hdr:i,H,idx,rows:r}; break; } }
     if(best) break; }
   if(!best) throw new Error("No encuentro una columna de importador y otra de valor o peso. Revisa que el Excel tenga encabezados como \"Importador\" y \"Valor FOB US$\" o \"Peso neto\".");
-  const {idx,H,rows}=best, agg={}; let tot=0, totKg=0, n=0, minD=null, maxD=null;
+  const {idx,H,rows}=best, agg={}, dests={}; let tot=0, totKg=0, n=0, minD=null, maxD=null;
   for(const r of rows.slice(best.hdr+1)){ if(!r) continue; const nm=String(r[idx.name]||"").trim(); if(!nm||/^total/i.test(nm)) continue;
     const usd=idx.usd!=null?num(r[idx.usd])||0:0, kg=idx.kg!=null?num(r[idx.kg])||0:0; if(!usd&&!kg) continue;
-    const key=nm.toUpperCase().replace(/[.,]/g,"").replace(/\s+/g," "); const a=agg[key]=agg[key]||{name:nm,usd:0,kg:0,ops:0,origins:{},hs:{}};
+    const words=nm.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
+    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{name:nm,usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{}};
+    a.names[nm]=(a.names[nm]||0)+1;
+    if(idx.exporter!=null){ const ex=String(r[idx.exporter]||"").trim(); if(ex) a.exporters[ex]=(a.exporters[ex]||0)+(usd||kg); }
+    if(idx.dest!=null){ const ds=String(r[idx.dest]||"").trim(); if(ds) dests[ds]=(dests[ds]||0)+1; }
     a.usd+=usd; a.kg+=kg; a.ops++; tot+=usd; totKg+=kg; n++;
     if(idx.origin!=null){ const o=String(r[idx.origin]||"").trim(); if(o) a.origins[o]=(a.origins[o]||0)+(usd||kg); }
     if(idx.hs!=null){ const h=String(r[idx.hs]||"").replace(/\D/g,"").slice(0,4); if(h) a.hs[h]=1; }
     if(idx.date!=null){ let d=r[idx.date]; if(typeof d==="number"&&d>20000&&d<80000){ d=new Date(Math.round((d-25569)*864e5)).toISOString().slice(0,10); } d=d?String(d).slice(0,10):null; if(d){ if(!minD||d<minD)minD=d; if(!maxD||d>maxD)maxD=d; } } }
   const by = tot>0 ? "usd" : "kg", T = tot>0 ? tot : totKg;
   const list=Object.values(agg).sort((a,b)=>b[by]-a[by]).slice(0,15).map(a=>{ const ot=Object.values(a.origins).reduce((x,y)=>x+y,0)||1;
-    return {name:a.name, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
+    const et=Object.values(a.exporters).reduce((x,y)=>x+y,0)||1; const nmBest=Object.entries(a.names).sort((x,y)=>y[1]-x[1]||y[0].length-x[0].length)[0][0];
+    return {name:nmBest, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
+      exporters:Object.entries(a.exporters).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/et*100})),
       origins:Object.entries(a.origins).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/ot*100}))}; });
-  return {rows:list, by, total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
+  const dest=Object.entries(dests).sort((x,y)=>y[1]-x[1])[0]; const mode=idx.exporter!=null?"ec_export":"import";
+  return {rows:list, by, mode, dest:dest?dest[0]:null, total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
 }
 
 /* ---------- publicar en GitHub ---------- */
@@ -94,7 +103,7 @@ async function publish(obj){
   if(!token) return {ok:false, encd, reason:"sin token"};
   const api=`https://api.github.com/repos/${REPO}/contents/${FILE}`, h={Authorization:"Bearer "+token, Accept:"application/vnd.github+json"};
   let sha; const g=await fetch(api,{headers:h}); if(g.ok) sha=(await g.json()).sha; else if(g.status!==404) return {ok:false, encd, reason:`GitHub respondió ${g.status} al leer el archivo. Revisa el token.`};
-  const p=await fetch(api,{method:"PUT",headers:h,body:JSON.stringify({message:"Datos privados actualizados desde la app",content:btoa(content),sha})});
+  const p=await fetch(api,{method:"PUT",headers:h,body:JSON.stringify({message:"Datos privados actualizados desde la app",content:b64(enc.encode(content)),sha})});
   if(!p.ok) return {ok:false, encd, reason:`GitHub respondió ${p.status} al guardar. Revisa que el token tenga permiso de escritura (Contents) en ${REPO}.`};
   FILE_STATE="present"; return {ok:true};
 }
@@ -159,14 +168,14 @@ function viewRanking(){
   } else {
     if(!d) body=`<p class="empty">Todavía no hay datos de Penta para ${esc(m.name)}. Exporta el Excel del país en Penta y súbelo aquí abajo.</p>`;
     else{
-      const by=d.by, max=Math.max(...d.rows.slice(0,10).map(r=>r.share),1);
-      body=`<div class="kpis"><div class="kpi"><div class="l">Importadores en el archivo</div><div class="v">${fmtInt(d.importers)} <small>${fmtInt(d.lines)} operaciones</small></div></div>
+      const by=d.by, max=Math.max(...d.rows.slice(0,10).map(r=>r.share),1), ec=d.mode==="ec_export";
+      body=`${ec?`<div class="notice info"><b>Compradores de cacao ecuatoriano.</b> Exportaciones de Ecuador con destino ${esc(m.name)}, según la aduana de Ecuador. Cada empresa ya compra origen Ecuador.</div>`:""}<div class="kpis"><div class="kpi"><div class="l">${ec?"Compradores":"Importadores"} en el archivo</div><div class="v">${fmtInt(d.importers)} <small>${fmtInt(d.lines)} operaciones</small></div></div>
         <div class="kpi"><div class="l">Total del período</div><div class="v">${by==="usd"?fmt1(d.totalUsd/1e6)+" <small>USD M</small>":fmtInt(d.totalKg/1000)+" <small>t</small>"}</div></div></div>
       <div class="list">${d.rows.slice(0,10).map((r,i)=>`<button class="item pv-row" data-pco="importadores|${i}" style="grid-template-columns:28px minmax(0,1fr) auto">
           <span class="n">${String(i+1).padStart(2,"0")}</span>
-          <span><div class="t">${esc(r.name)}</div>${bar(r.share,max,"var(--cacao-yellow)")}<div class="s">${r.origins.map(o=>`${o.name==="ECUADOR"||/ecuador/i.test(o.name)?"<b style=\"color:var(--cacao-green)\">"+esc(o.name)+"</b>":esc(o.name)} ${fmt1(o.share)} %`).join(" · ")||""}${r.hs.length?` · HS ${r.hs.join(", ")}`:""}</div></span>
+          <span><div class="t">${esc(r.name)}</div>${bar(r.share,max,"var(--cacao-yellow)")}<div class="s">${(r.exporters&&r.exporters.length)?"Le venden: "+r.exporters.map(x=>`${esc(x.name)} ${fmt1(x.share)} %`).join(" · "):""}${r.origins.map(o=>`${o.name==="ECUADOR"||/ecuador/i.test(o.name)?"<b style=\"color:var(--cacao-green)\">"+esc(o.name)+"</b>":esc(o.name)} ${fmt1(o.share)} %`).join(" · ")||""}${r.hs.length?` · HS ${r.hs.join(", ")}`:""}</div></span>
           <span style="text-align:right"><div class="mono" style="font-size:16px">${fmt1(r.share)} %</div><div class="src mono">${by==="usd"?"USD "+fmtInt(r.usd/1000)+" mil":fmtInt(r.kg/1000)+" t"}</div></span></button>`).join("")}</div>
-      <p class="src"><b>Fuente:</b> ${K.src}. Período: ${esc(d.from||"—")} a ${esc(d.to||"—")}. Cuota sobre el total del archivo, en ${by==="usd"?"valor":"peso"}. Cargado: ${esc(d.loaded||"—")}.</p>
+      <p class="src"><b>Fuente:</b> ${K.src}${ec?" (Ecuador, exportaciones)":""}. Período: ${esc(d.from||"—")} a ${esc(d.to||"—")}. Cuota sobre el total del archivo, en ${by==="usd"?"valor":"peso"}. Cargado: ${esc(d.loaded||"—")}.</p>
       <p class="src">Columnas leídas: ${Object.entries(d.columns).map(([k,v])=>`${k} = "${esc(v)}"`).join(" · ")}</p>`;
     }
   }
@@ -178,7 +187,7 @@ function rankCompany(kind,i){
   if(kind==="procesadores"){ const ys=PRIV.meta_proc.years, y=ys[ys.length-1], f=d._top[i];
     return {id:`${m.iso3}-P-${i}`, name:f.name, type:"procesador", city:m.name, what:`Cuota del mercado de chocolate en ${m.name}: ${fmt1(f.shares[y])} % en ${y} (${ys.map(yy=>f.shares[yy]!=null?yy+": "+fmt1(f.shares[yy])+" %":"").filter(Boolean).join(", ")}).`, source:"Euromonitor International", sourceDate:PRIV.meta_proc.exported}; }
   const r=d.rows[i];
-  return {id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). Orígenes: ${r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato"}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
+  return {id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
 }
 
 /* ---------- integración con la app ---------- */
@@ -227,7 +236,7 @@ function bindPriv(){
     if(tok) ls.set("ek_gh_token",tok);
     try{ msg.textContent="Leyendo el Excel…"; const wb=await readBook(file); const now=new Date().toISOString().slice(0,10);
       if(kind==="procesadores"){ const p=parseEuromonitor(wb); PRIV.procesadores=p.markets; PRIV.volumen=p.volumen; PRIV.meta_proc={years:p.years,category:p.category,dataType:p.dataType,exported:p.exported,loaded:now,file:file.name}; MSG=`Leídos ${Object.keys(p.markets).length} mercados (${p.years.join(", ")}).`; }
-      else { const iso=$("#pv-country").value, p=parsePenta(wb); p.loaded=now; p.file=file.name; PRIV.importadores[iso]=p; MSG=`Leídos ${p.lines} registros y ${p.importers} importadores.`; if(iso!==state.market.iso3) state.market=BY3[iso]; }
+      else { const p=parsePenta(wb); let iso=$("#pv-country").value; const dm=p.dest&&MARKETS.find(x=>x.name.toLowerCase()===p.dest.toLowerCase()); if(dm) iso=dm.iso3; p.loaded=now; p.file=file.name; PRIV.importadores[iso]=p; MSG=`Leídos ${p.lines} registros y ${p.importers} importadores.`; if(iso!==state.market.iso3) state.market=BY3[iso]; }
       msg.textContent=MSG+" Cifrando y publicando…";
       const clean=JSON.parse(JSON.stringify(PRIV,(k,v)=>k==="_top"?undefined:v)); const r=await publish(clean);
       if(r.ok) MSG+=" Publicado: el equipo lo verá en 1–2 minutos.";
