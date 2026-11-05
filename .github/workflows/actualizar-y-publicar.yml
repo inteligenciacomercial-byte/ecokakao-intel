@@ -2,7 +2,7 @@ name: Actualizar datos y publicar web
 
 on:
   schedule:
-    - cron: "17 6 3 * *"   # día 3 de cada mes, 06:17 UTC
+    - cron: "17 11 10 * *"   # día 10 de cada mes, 06:17 hora de Ecuador (11:17 UTC)
   workflow_dispatch:        # botón "Run workflow" para ejecutarlo a mano
   push:
     branches: [main]
