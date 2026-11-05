@@ -749,5 +749,6 @@ savePipe();
 let rt; addEventListener("resize",()=>{clearTimeout(rt); rt=setTimeout(()=>{ if(!features.length) return; $("#map").innerHTML=""; drawMap(); if(state.market && $("#panel").classList.contains("open")) focusMarket(state.market); },200);});
 </script>
 
+<script src="privado.js"></script>
 </body>
 </html>
