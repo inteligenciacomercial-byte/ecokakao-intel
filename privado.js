@@ -82,9 +82,10 @@ function aggregate(rows, idx, H){
   for(const r of rows){ const nm=String(r[idx.name]||"").trim(); if(!nm||/^total/i.test(nm)) continue;
     const usd=idx.usd!=null?num(r[idx.usd])||0:0, kg=idx.kg!=null?num(r[idx.kg])||0:0; if(!usd&&!kg) continue;
     const words=nm.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
-    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{}};
+    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{},dests:{}};
     a.names[nm]=(a.names[nm]||0)+1;
     if(idx.exporter!=null){ const ex=String(r[idx.exporter]||"").trim(); if(ex) a.exporters[ex]=(a.exporters[ex]||0)+(usd||kg); }
+    if(idx.dest!=null){ const dd=String(r[idx.dest]||"").trim(); if(dd) a.dests[dd]=(a.dests[dd]||0)+(usd||kg); }
     a.usd+=usd; a.kg+=kg; a.ops++; tot+=usd; totKg+=kg; n++;
     if(idx.origin!=null){ const o=String(r[idx.origin]||"").trim(); if(o) a.origins[o]=(a.origins[o]||0)+(usd||kg); }
     if(idx.hs!=null){ const h=String(r[idx.hs]||"").replace(/\D/g,"").slice(0,4); if(h) a.hs[h]=1; }
@@ -93,10 +94,16 @@ function aggregate(rows, idx, H){
   const list=Object.values(agg).sort((a,b)=>b[by]-a[by]).slice(0,15).map(a=>{ const ot=Object.values(a.origins).reduce((x,y)=>x+y,0)||1;
     const et=Object.values(a.exporters).reduce((x,y)=>x+y,0)||1; const nmBest=Object.entries(a.names).sort((x,y)=>y[1]-x[1]||y[0].length-x[0].length)[0][0];
     return {name:nmBest, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
+      dests:(()=>{const dt=Object.values(a.dests).reduce((x,y)=>x+y,0)||1; return Object.entries(a.dests).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/dt*100}));})(),
       exporters:Object.entries(a.exporters).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/et*100})),
       origins:Object.entries(a.origins).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/ot*100}))}; });
   return {rows:list, by, mode:idx.exporter!=null?"ec_export":"import", total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
 }
+const HQ_EXTRA={USA:["USA","U.S.A","UNITED STATES"],GBR:["UNITED KINGDOM","ENGLAND"],NLD:["NETHERLANDS","HOLLAND"],KOR:["KOREA"],ARE:["UAE","DUBAI"],HKG:["HONG KONG"],LVA:["LATVIA","RIGA"],PHL:["PHILIPPINES","MANILA"],SGP:["SINGAPORE"],RUS:["RUSSIA","RUSSIAN FEDERATION"],TUR:["TURKEY","TURKIYE"],CZE:["CZECH"]};
+function hqPatterns(){ return MARKETS.map(m=>{ const names=[...new Set([enName(m.iso2),esName(m.iso2),m.name,...(HQ_EXTRA[m.iso3]||[])].map(x=>normC(x).toUpperCase()).filter(x=>x&&x.length>2))];
+  return {iso:m.iso3, re:new RegExp("\\b("+names.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")\\b","g")}; }); }
+function hqIso(text,pats){ const T=normC(text).toUpperCase(); let best=null,pos=-1;
+  for(const p of pats){ p.re.lastIndex=0; let mm; while((mm=p.re.exec(T))){ if(mm.index>pos){pos=mm.index;best=p.iso;} } } return best; }
 /* Devuelve {byIso:{ISO3:resultado}, unmatched:{destino:filas}, single:true|false} */
 function parsePenta(wb, fallbackIso){
   const t=findTable(wb), data=t.rows.slice(t.hdr+1).filter(r=>r&&r.some(c=>c!=null&&c!==""));
@@ -104,7 +111,13 @@ function parsePenta(wb, fallbackIso){
   const groups={}, unmatched={};
   for(const r of data){ const d=String(r[t.idx.dest]||"").trim(); const iso=destIso(d); if(iso&&BY3[iso]) (groups[iso]=groups[iso]||[]).push(r); else if(d) unmatched[d]=(unmatched[d]||0)+1; }
   const byIso={}; for(const [iso,rs] of Object.entries(groups)) byIso[iso]=aggregate(rs,t.idx,t.H);
-  return {byIso, unmatched, single:Object.keys(byIso).length<=1};
+  /* Sede del comprador según su dirección (para quien compra desde un país y recibe en otro) */
+  const ac=[t.idx.name-1,t.idx.name+1].filter(j=>j>=0&&/direcci|address|domicilio/i.test(t.H[j]||""));
+  const hq={};
+  if(ac.length){ const pats=hqPatterns();
+    for(const r of data){ const iso=hqIso(ac.map(j=>r[j]).join(" | "),pats); const di=destIso(String(r[t.idx.dest]||"")); if(iso&&iso!==di) (hq[iso]=hq[iso]||[]).push(r); } }
+  const hqAgg={}; for(const [iso,rs] of Object.entries(hq)) hqAgg[iso]=aggregate(rs,t.idx,t.H);
+  return {byIso, hq:hqAgg, unmatched, single:Object.keys(byIso).length<=1};
 }
 
 /* ---------- publicar en GitHub ---------- */
@@ -177,7 +190,8 @@ function viewRanking(){
       d._top=firms;
     }
   } else {
-    if(!d) body=`<p class="empty">Todavía no hay datos de Penta para ${esc(m.name)}. Exporta el Excel del país en Penta y súbelo aquí abajo.</p>`;
+    const anyEc=Object.values(PRIV.importadores||{}).find(x=>x&&x.mode==="ec_export"&&!x.hqOnly);
+    if(!d||d.hqOnly) body = anyEc ? `<div class="notice info"><b>Sin envíos directos desde Ecuador</b> hacia ${esc(m.name)} entre ${esc(anyEc.from||"—")} y ${esc(anyEc.to||"—")}, según la aduana de Ecuador (Penta).</div>` : `<p class="empty">Todavía no hay datos de Penta para ${esc(m.name)}. Exporta el Excel del país en Penta y súbelo aquí abajo.</p>`;
     else{
       const by=d.by, max=Math.max(...d.rows.slice(0,10).map(r=>r.share),1), ec=d.mode==="ec_export";
       body=`${ec?`<div class="notice info"><b>Compradores de cacao ecuatoriano.</b> Exportaciones de Ecuador con destino ${esc(m.name)}, según la aduana de Ecuador. Cada empresa ya compra origen Ecuador.</div>`:""}<div class="kpis"><div class="kpi"><div class="l">${ec?"Compradores":"Importadores"} en el archivo</div><div class="v">${fmtInt(d.importers)} <small>${fmtInt(d.lines)} operaciones</small></div></div>
@@ -189,14 +203,24 @@ function viewRanking(){
       <p class="src"><b>Fuente:</b> ${K.src}${ec?" (Ecuador, exportaciones)":""}. Período: ${esc(d.from||"—")} a ${esc(d.to||"—")}. Cuota sobre el total del archivo, en ${by==="usd"?"valor":"peso"}. Cargado: ${esc(d.loaded||"—")}.</p>
       <p class="src">Columnas leídas: ${Object.entries(d.columns).map(([k,v])=>`${k} = "${esc(v)}"`).join(" · ")}</p>`;
     }
+    if(d&&d.hq&&d.hq.rows.length){ const h=d.hq, mx=Math.max(...h.rows.slice(0,10).map(r=>r.share),1);
+      body+=`<section><h3 style="margin:8px 0 4px">Compradores con sede aquí que reciben en otro país</h3>
+      <p class="src" style="margin:0 0 8px">Empresas cuya dirección en la aduana está en ${esc(m.name)}, aunque el cacao se envía a otro destino. Suelen ser traders o casas matrices.</p>
+      <div class="list">${h.rows.slice(0,10).map((r,i)=>`<button class="item pv-row" data-pco="hq|${i}" style="grid-template-columns:28px minmax(0,1fr) auto">
+          <span class="n">${String(i+1).padStart(2,"0")}</span>
+          <span><div class="t">${esc(r.name)}</div>${bar(r.share,mx,"var(--cacao-green)")}<div class="s">Recibe en: ${r.dests.map(o=>`${esc(o.name)} ${fmt1(o.share)} %`).join(" · ")||"—"}${r.exporters&&r.exporters.length?" · Le venden: "+r.exporters.map(x=>esc(x.name)).join(", "):""}</div></span>
+          <span style="text-align:right"><div class="mono" style="font-size:16px">${r.ops}</div><div class="src mono">operaciones</div></span></button>`).join("")}</div>
+      <p class="src"><b>Fuente:</b> Penta-Transaction (Ecuador, exportaciones), dirección del comprador. Período: ${esc(h.from||"—")} a ${esc(h.to||"—")}. La sede se deduce del texto de la dirección; revisa la ficha antes de contactar.</p></section>`; }
   }
   return head+body+uploadBox(kind);
 }
 
 function rankCompany(kind,i){
-  const m=state.market, d=PRIV[kind][m.iso3];
+  const m=state.market, d=(PRIV[kind]||{})[m.iso3];
   if(kind==="procesadores"){ const ys=PRIV.meta_proc.years, y=ys[ys.length-1], f=d._top[i];
     return {id:`${m.iso3}-P-${i}`, name:f.name, type:"procesador", city:m.name, what:`Cuota del mercado de chocolate en ${m.name}: ${fmt1(f.shares[y])} % en ${y} (${ys.map(yy=>f.shares[yy]!=null?yy+": "+fmt1(f.shares[yy])+" %":"").filter(Boolean).join(", ")}).`, source:"Euromonitor International", sourceDate:PRIV.meta_proc.exported}; }
+  if(kind==="hq"){ const r=PRIV.importadores[m.iso3].hq.rows[i];
+    return {id:`${m.iso3}-H-${i}`, name:r.name, type:"importador", city:m.name, what:`Comprador de cacao ecuatoriano con sede en ${m.name} según su dirección en aduana; la mercancía se envía a ${r.dests.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"otro país"} (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")+".":""}`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:"Penta-Transaction (aduana de Ecuador, exportaciones)", sourceDate:`${r.from||PRIV.importadores[m.iso3].hq.from||""} a ${PRIV.importadores[m.iso3].hq.to||""}`}; }
   const r=d.rows[i];
   return {id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
 }
@@ -253,6 +277,7 @@ function bindPriv(){
         if(!isos.length) throw new Error("El Excel no trae envíos hacia ninguno de los 40 mercados.");
         if(!res.single) PRIV.importadores={};
         for(const iso of isos){ const p=res.byIso[iso]; p.loaded=now; p.file=file.name; PRIV.importadores[iso]=p; }
+        if(!res.single) for(const [iso,h] of Object.entries(res.hq||{})){ const e=PRIV.importadores[iso]||(PRIV.importadores[iso]={hqOnly:true,loaded:now,file:file.name,from:h.from,to:h.to}); e.hq=h; }
         const lines=isos.reduce((a,i)=>a+res.byIso[i].lines,0), un=Object.keys(res.unmatched);
         MSG = res.single ? `Leídos ${lines} registros y ${res.byIso[isos[0]].importers} compradores (${BY3[isos[0]].name}).` : `Leídos ${lines} registros: ${isos.length} mercados actualizados (${isos.map(i=>BY3[i].name).join(", ")}).`;
         if(un.length) MSG+=` Destinos fuera de los 40 mercados, no incluidos: ${un.slice(0,8).join(", ")}${un.length>8?"…":""}.`;
@@ -389,5 +414,67 @@ render=function(){ _render2(); if(state.view!=="market"||!state.market) return; 
     const fig=document.createElement("figure"); fig.className="cphoto";
     fig.innerHTML=`<img src="${esc(p.src)}" alt="${esc(p.cap||m.name)}" loading="lazy"><figcaption>${p.cap?esc(p.cap)+" · ":""}<a href="${esc(p.page)}" target="_blank" rel="noopener">Wikimedia Commons</a></figcaption>`;
     fig.querySelector("img").onerror=()=>fig.remove(); head.insertBefore(fig, head.firstChild); }); };
+
+/* ===== Contactos reales vía Apollo (se activa al poner APOLLO_URL) ===== */
+const APOLLO_URL = "";   // URL del intermediario de Cloudflare. Vacío = botones ocultos.
+const APL = {};
+async function teamHash(){ const d=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(PW||"")); return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+async function apl(path, body){
+  const r=await fetch(APOLLO_URL.replace(/\/$/,"")+path,{method:"POST",headers:{"content-type":"application/json","x-team":await teamHash()},body:JSON.stringify(body||{})});
+  const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||("Error "+r.status)); return j;
+}
+const aplOn = c => APOLLO_URL && PW && c && /Euromonitor|Penta/.test(c.source||"");
+const _viewCompany3 = viewCompany;
+viewCompany = function(){
+  let h=_viewCompany3(); const c=state.company; if(!aplOn(c)) return h;
+  h=h.replace(/<section><h3>Contactos clave<\/h3>[\s\S]*?<\/section>/, `<section><h3>Contactos de compras</h3><p class="lead" style="margin:0 0 10px">Personas de compras y abastecimiento según Apollo. Ver la lista no gasta créditos.</p><button class="cta" data-tab="contactos">Ver personas <span>→</span></button></section>`);
+  if(state.tab==="contactos") h=h.replace(/(<div class="tabs" role="tablist">[\s\S]*?<\/div>)[\s\S]*$/, `$1<div id="apl"><p class="lead">Buscando personas en Apollo…</p></div>`);
+  return h;
+};
+function aplPerson(p, rv){
+  const mail = rv&&rv.emailStatus ? (rv.email?`<a href="mailto:${esc(rv.email)}" style="color:var(--cacao-yellow)">${esc(rv.email)}</a> <button class="ghost" data-copy="${esc(rv.email)}" style="padding:2px 8px;font-size:11px">Copiar</button>`:`<span style="color:var(--dim)">Apollo no tiene su email</span>`)
+    : `<button class="cta" data-reveal="${esc(p.id)}" style="padding:7px 12px;font-size:13px">Revelar email <span style="font-size:11px;opacity:.8">· 1 crédito</span></button>`;
+  let phone="";
+  if(rv&&rv.emailStatus){
+    if(rv.phoneStatus==="ok") phone=(rv.phones||[]).map(n=>`<a href="tel:${esc(n)}" style="color:var(--cacao-yellow)">${esc(n)}</a>`).join(" · ");
+    else if(rv.phoneStatus==="pending") phone=`<span style="color:var(--dim)">Buscando número… puede tardar unos minutos.</span>`;
+    else if(rv.phoneStatus==="none") phone=`<span style="color:var(--dim)">Apollo no tiene su número</span>`;
+    else phone=`<button class="ghost" data-rphone="${esc(p.id)}" style="padding:4px 10px;font-size:12px">Revelar número</button> <small style="color:var(--dim)">+8 créditos</small>`;
+  }
+  return `<div class="pv-row" style="border-bottom:1px solid var(--line);padding:12px 0">
+    <div style="font-weight:500">${esc(p.name)}${p.linkedin?` <a href="${esc(p.linkedin)}" target="_blank" rel="noopener" style="color:var(--muted);font-size:12px">LinkedIn ↗</a>`:""}</div>
+    <div style="color:var(--muted);font-size:13px">${esc(p.title||"Cargo sin dato")}${p.city?" · "+esc(p.city):""}</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">${mail}${phone?`<div>${phone}</div>`:""}</div></div>`;
+}
+function aplDraw(){
+  const box=$("#apl"); if(!box) return; const c=state.company, k=c.name+"|"+state.market.iso2, d=APL[k];
+  if(!d) return; if(d.error){ box.innerHTML=`<div class="notice">No se pudo consultar Apollo: ${esc(d.error)}</div>`; return; }
+  if(!d.org){ box.innerHTML=`<div class="notice info">Apollo no encontró esta empresa con ese nombre. Prueba buscarla a mano en <a href="https://app.apollo.io/#/companies?qOrganizationName=${encodeURIComponent(c.name)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">Apollo ↗</a>.</div>`; return; }
+  box.innerHTML=`<div class="def">Empresa en Apollo: <b style="color:var(--fg)">${esc(d.org.name)}</b>${d.org.domain?" · "+esc(d.org.domain.replace(/^https?:\/\//,"")):""}. Revela solo a quien vayas a contactar: el plan gratis trae 75 créditos al mes.</div>
+    ${d.people.length?d.people.map(p=>aplPerson(p,d.rv[p.id])).join(""):'<p class="lead">No hay personas de compras registradas para esta empresa.</p>'}
+    <p class="src">Fuente: Apollo.io. Solo datos profesionales. Lo ya revelado queda guardado para el equipo y no se vuelve a pagar.</p>`;
+  box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.reveal,false,b));
+  box.querySelectorAll("[data-rphone]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.rphone,true,b));
+  box.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{ try{navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copiado";}catch(e){} });
+}
+async function aplLoad(){
+  const c=state.company, k=c.name+"|"+state.market.iso2;
+  if(!APL[k]){ try{ const j=await apl("/people",{company:c.name,country:enName(state.market.iso2)}); APL[k]={org:j.org,people:j.people||[],rv:{}};
+      await Promise.all((j.people||[]).map(async p=>{ try{ const r=await apl("/contact",{id:p.id}); if(r&&r.emailStatus) APL[k].rv[p.id]=r; }catch(e){} }));
+    }catch(e){ APL[k]={error:e.message}; } }
+  aplDraw(); aplPoll();
+}
+async function aplReveal(id, phone, btn){
+  const k=state.company.name+"|"+state.market.iso2; btn.disabled=true; btn.textContent=phone?"Pidiendo número…":"Revelando…";
+  try{ APL[k].rv[id]=await apl("/reveal",{id,phone}); }catch(e){ toast("Apollo: "+e.message); }
+  aplDraw(); aplPoll();
+}
+let aplT; function aplPoll(){
+  clearTimeout(aplT); const c=state.company; if(!c||!$("#apl")) return; const k=c.name+"|"+state.market.iso2, d=APL[k]; if(!d||!d.rv) return;
+  const pend=Object.entries(d.rv).filter(([,v])=>v.phoneStatus==="pending"); if(!pend.length) return;
+  aplT=setTimeout(async()=>{ for(const [id] of pend){ try{ d.rv[id]=await apl("/contact",{id}); }catch(e){} } aplDraw(); aplPoll(); },20000);
+}
+const _bindPriv2 = bindPriv;
+bindPriv = function(){ _bindPriv2(); if($("#apl")) aplLoad(); };
 tryAutoUnlock();
 })();
