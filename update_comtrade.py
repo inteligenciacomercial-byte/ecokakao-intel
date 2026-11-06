@@ -65,21 +65,55 @@ def get_json(url, params=None, auth=True, tries=3):
 
 
 def reporter_codes():
+    """Códigos de UN Comtrade de todos los países (no grupos) + ISO2 y nombre en inglés."""
     codes = dict(FALLBACK_CODES)
-    names = {}
+    info = {}
     try:
         ref = get_json(REF, auth=False)
         for r in ref.get("results", []):
             iso3 = r.get("reporterCodeIsoAlpha3")
-            if iso3 in codes and not r.get("isGroup"):
-                end = r.get("entryExpiredDate")
-                if end:  # códigos antiguos ya no válidos
-                    continue
-                codes[iso3] = r.get("reporterCode", codes[iso3])
-                names[iso3] = r.get("reporterDesc") or r.get("text")
+            if not iso3 or r.get("isGroup") or r.get("entryExpiredDate"):
+                continue
+            codes[iso3] = r.get("reporterCode", codes.get(iso3))
+            info[iso3] = {"iso2": r.get("reporterCodeIsoAlpha2"), "name": r.get("reporterDesc") or r.get("text")}
     except Exception as e:
         print("Aviso: no se pudo leer la lista oficial de países:", e)
-    return codes, names
+    return codes, info
+
+
+ECUADOR = 218
+PILOT = "TUR"   # mercado piloto: siempre incluido
+N_MARKETS = 40
+
+
+def select_markets(years, info):
+    """Los 40 principales destinos del cacao de Ecuador (HS 1801-1806),
+    por valor FOB promedio de los últimos años, según lo que declara Ecuador."""
+    params = {"reporterCode": ECUADOR, "period": ",".join(str(y) for y in years), "flowCode": "X",
+              "cmdCode": ",".join(HS), "partner2Code": 0, "customsCode": "C00", "motCode": 0, "includeDesc": "true"}
+    data = get_json(API, params)
+    tot, seen_years = {}, set()
+    for r in (data.get("data") or []):
+        if not is_total_row(r) or str(r.get("partnerCode")) == "0":
+            continue
+        iso3 = r.get("partnerISO")
+        if not iso3 or iso3 not in info or len(iso3) != 3:   # descarta agregados y zonas sin país
+            continue
+        seen_years.add(str(r.get("period")))
+        tot[iso3] = tot.get(iso3, 0) + float(r.get("primaryValue") or 0)
+    if not tot:
+        return None
+    n_years = max(1, len(seen_years))
+    ranked = sorted(tot.items(), key=lambda kv: -kv[1])
+    chosen = [iso for iso, _ in ranked[:N_MARKETS]]
+    if PILOT not in chosen:
+        chosen = chosen[:N_MARKETS - 1] + [PILOT]
+    out = []
+    for i, iso in enumerate(chosen):
+        out.append({"iso3": iso, "iso2": info.get(iso, {}).get("iso2"), "nameEn": info.get(iso, {}).get("name"),
+                    "avgUsd": round(tot.get(iso, 0) / n_years), "rank": i + 1, "pilot": iso == PILOT})
+    return {"criterion": "Top %d destinos de las exportaciones de cacao de Ecuador (HS 1801-1806), valor FOB promedio %s, declarado por Ecuador a UN Comtrade. Turquía se mantiene como piloto." % (N_MARKETS, "-".join(sorted(seen_years)[::max(1, len(seen_years)-1)])),
+            "years": sorted(int(y) for y in seen_years), "markets": out}
 
 
 def is_total_row(row):
@@ -244,16 +278,37 @@ def main():
 
     try:
         with open(OUT, encoding="utf-8") as f:
-            previous = json.load(f).get("markets", {})
+            prev_file = json.load(f)
+        previous = prev_file.get("markets", {})
+        previous_selection = prev_file.get("selection")
     except Exception:
-        previous = {}
+        previous, previous_selection = {}, None
 
     this_year = datetime.date.today().year
     years = [this_year - 3, this_year - 2, this_year - 1]
-    codes, _ = reporter_codes()
+    codes, info = reporter_codes()
 
+    # 1) Elegir los 40 mercados según dónde vende Ecuador (se guarda dentro de imports.json)
+    try:
+        sel = select_markets(years, info)
+    except Exception as e:
+        print("Aviso: no se pudo recalcular la lista de mercados:", e)
+        sel = None
+    if sel:
+        sel["generated"] = datetime.date.today().isoformat()
+    else:
+        sel = previous_selection
+        print("Se conserva la lista de mercados anterior." if sel else "Se usa la lista inicial de mercados.")
+    market_list = [m["iso3"] for m in sel["markets"]] if sel else MARKETS
+    print("Mercados:", ", ".join(market_list))
+    time.sleep(2)
+
+    # 2) Importaciones de cada mercado
     markets, log = {}, []
-    for iso3 in MARKETS:
+    for iso3 in market_list:
+        if iso3 not in codes:
+            log.append(f"{iso3}: sin código en UN Comtrade")
+            continue
         try:
             m = build_market(iso3, codes[iso3], years)
             if not m:  # el país no publica sus importaciones: usar datos espejo
@@ -281,10 +336,11 @@ def main():
             "hs": HS,
             "generated": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
             "markets": markets,
+            "selection": sel,
         }, f, ensure_ascii=False, indent=1)
 
     print("\n".join(log))
-    print(f"\nMercados con datos: {len(markets)} de {len(MARKETS)}")
+    print(f"\nMercados con datos: {len(markets)} de {len(market_list)}")
 
 
 if __name__ == "__main__":
