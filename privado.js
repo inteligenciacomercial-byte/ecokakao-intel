@@ -67,7 +67,7 @@ const COLS = {
   hs:/posici[oó]n|partida|ncm|hs|arancel|nandina|tariff/i
 };
 const normC = t => String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z ]/g," ").replace(/\s+/g," ").trim();
-const DEST_ALIAS = {"republica checa":"CZE","chequia":"CZE","czech republic":"CZE","holanda":"NLD","paises bajos":"NLD","netherlands":"NLD","estados unidos de america":"USA","estados unidos":"USA","eeuu":"USA","united states":"USA","usa":"USA","corea del sur":"KOR","corea republica de":"KOR","corea sur":"KOR","republica de corea":"KOR","south korea":"KOR","korea":"KOR","federacion de rusia":"RUS","rusia":"RUS","russia":"RUS","turquia":"TUR","turkiye":"TUR","turkey":"TUR","reino unido":"GBR","inglaterra":"GBR","gran bretana":"GBR","united kingdom":"GBR","emiratos arabes unidos":"ARE","emiratos arabes":"ARE","arabia saudita":"SAU","arabia saudi":"SAU","sudafrica":"ZAF","africa del sur":"ZAF","singapur":"SGP","japon":"JPN","china":"CHN","china republica popular":"CHN"};
+const DEST_ALIAS = {"republica checa":"CZE","chequia":"CZE","czech republic":"CZE","holanda":"NLD","paises bajos":"NLD","netherlands":"NLD","estados unidos de america":"USA","estados unidos":"USA","eeuu":"USA","united states":"USA","usa":"USA","corea del sur":"KOR","corea republica de":"KOR","corea sur":"KOR","republica de corea":"KOR","south korea":"KOR","korea":"KOR","federacion de rusia":"RUS","rusia":"RUS","russia":"RUS","turquia":"TUR","turkiye":"TUR","turkey":"TUR","reino unido":"GBR","inglaterra":"GBR","gran bretana":"GBR","united kingdom":"GBR","emiratos arabes unidos":"ARE","emiratos arabes":"ARE","arabia saudita":"SAU","arabia saudi":"SAU","sudafrica":"ZAF","africa del sur":"ZAF","singapur":"SGP","japon":"JPN","china":"CHN","china republica popular":"CHN","hong kong":"HKG","hong kong china":"HKG","rae de hong kong china":"HKG","taiwan":"TWN"};
 function destIso(name){ const n=normC(name); if(!n) return null; if(DEST_ALIAS[n]) return DEST_ALIAS[n];
   const m=MARKETS.find(x=>normC(x.name)===n); if(m) return m.iso3; const e=Object.keys(EURO_NAMES).find(k=>normC(k)===n); return e?EURO_NAMES[e]:null; }
 function findTable(wb){
@@ -275,7 +275,7 @@ const REG = {
 };
 const regionOf = iso2 => { for(const [r,l] of Object.entries(REG)) if(l.split(" ").includes(iso2)) return r; return "Otros mercados"; };
 let SELECTION = null;
-const esName = iso2 => { try{ return new Intl.DisplayNames(["es"],{type:"region"}).of(iso2); }catch(e){ return iso2; } };
+const esName = iso2 => { if(iso2==="HK") return "Hong Kong"; try{ return new Intl.DisplayNames(["es"],{type:"region"}).of(iso2); }catch(e){ return iso2; } };
 const enName = iso2 => { try{ return new Intl.DisplayNames(["en"],{type:"region"}).of(iso2); }catch(e){ return iso2; } };
 function centroidOf(iso2, iso3){ try{ const f=(features||[]).find(f=>f.properties.iso2===iso2||f.properties.iso3===iso3); if(f&&window.d3){ const c=d3.geoCentroid(f); if(isFinite(c[0])) return c; } }catch(e){} return null; }
 function applySelection(){
