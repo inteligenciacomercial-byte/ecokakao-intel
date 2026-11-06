@@ -66,22 +66,25 @@ const COLS = {
   origin:/pa[ií]s de origen|^origen$|^origin$|^country of origin|pa[ií]s de procedencia|^procedencia$/i,
   hs:/posici[oó]n|partida|ncm|hs|arancel|nandina|tariff/i
 };
-function parsePenta(wb){
-  let best=null;
+const normC = t => String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z ]/g," ").replace(/\s+/g," ").trim();
+const DEST_ALIAS = {"republica checa":"CZE","chequia":"CZE","czech republic":"CZE","holanda":"NLD","paises bajos":"NLD","netherlands":"NLD","estados unidos de america":"USA","estados unidos":"USA","eeuu":"USA","united states":"USA","usa":"USA","corea del sur":"KOR","corea republica de":"KOR","corea sur":"KOR","republica de corea":"KOR","south korea":"KOR","korea":"KOR","federacion de rusia":"RUS","rusia":"RUS","russia":"RUS","turquia":"TUR","turkiye":"TUR","turkey":"TUR","reino unido":"GBR","inglaterra":"GBR","gran bretana":"GBR","united kingdom":"GBR","emiratos arabes unidos":"ARE","emiratos arabes":"ARE","arabia saudita":"SAU","arabia saudi":"SAU","sudafrica":"ZAF","africa del sur":"ZAF","singapur":"SGP","japon":"JPN","china":"CHN","china republica popular":"CHN"};
+function destIso(name){ const n=normC(name); if(!n) return null; if(DEST_ALIAS[n]) return DEST_ALIAS[n];
+  const m=MARKETS.find(x=>normC(x.name)===n); if(m) return m.iso3; const e=Object.keys(EURO_NAMES).find(k=>normC(k)===n); return e?EURO_NAMES[e]:null; }
+function findTable(wb){
   for(const name of wb.SheetNames){ const r=rowsOf(wb.Sheets[name]);
     for(let i=0;i<Math.min(r.length,40);i++){ const H=(r[i]||[]).map(c=>String(c||"").trim()); const idx={};
       for(const [k,re] of Object.entries(COLS)){ const j=H.findIndex((h,jj)=>h&&re.test(h)&&!Object.values(idx).includes(jj)); if(j>=0) idx[k]=j; }
-      if(idx.name!=null&&(idx.usd!=null||idx.kg!=null)){ best={name,hdr:i,H,idx,rows:r}; break; } }
-    if(best) break; }
-  if(!best) throw new Error("No encuentro una columna de importador y otra de valor o peso. Revisa que el Excel tenga encabezados como \"Importador\" y \"Valor FOB US$\" o \"Peso neto\".");
-  const {idx,H,rows}=best, agg={}, dests={}; let tot=0, totKg=0, n=0, minD=null, maxD=null;
-  for(const r of rows.slice(best.hdr+1)){ if(!r) continue; const nm=String(r[idx.name]||"").trim(); if(!nm||/^total/i.test(nm)) continue;
+      if(idx.name!=null&&(idx.usd!=null||idx.kg!=null)) return {name,hdr:i,H,idx,rows:r}; } }
+  throw new Error("No encuentro una columna de importador o comprador y otra de valor o peso. Revisa que el Excel tenga encabezados como \"Comprador\" y \"U$S FOB\" o \"Peso neto\".");
+}
+function aggregate(rows, idx, H){
+  const agg={}; let tot=0, totKg=0, n=0, minD=null, maxD=null;
+  for(const r of rows){ const nm=String(r[idx.name]||"").trim(); if(!nm||/^total/i.test(nm)) continue;
     const usd=idx.usd!=null?num(r[idx.usd])||0:0, kg=idx.kg!=null?num(r[idx.kg])||0:0; if(!usd&&!kg) continue;
-    const words=nm.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
-    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{name:nm,usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{}};
+    const words=nm.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
+    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{}};
     a.names[nm]=(a.names[nm]||0)+1;
     if(idx.exporter!=null){ const ex=String(r[idx.exporter]||"").trim(); if(ex) a.exporters[ex]=(a.exporters[ex]||0)+(usd||kg); }
-    if(idx.dest!=null){ const ds=String(r[idx.dest]||"").trim(); if(ds) dests[ds]=(dests[ds]||0)+1; }
     a.usd+=usd; a.kg+=kg; a.ops++; tot+=usd; totKg+=kg; n++;
     if(idx.origin!=null){ const o=String(r[idx.origin]||"").trim(); if(o) a.origins[o]=(a.origins[o]||0)+(usd||kg); }
     if(idx.hs!=null){ const h=String(r[idx.hs]||"").replace(/\D/g,"").slice(0,4); if(h) a.hs[h]=1; }
@@ -92,8 +95,16 @@ function parsePenta(wb){
     return {name:nmBest, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
       exporters:Object.entries(a.exporters).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/et*100})),
       origins:Object.entries(a.origins).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/ot*100}))}; });
-  const dest=Object.entries(dests).sort((x,y)=>y[1]-x[1])[0]; const mode=idx.exporter!=null?"ec_export":"import";
-  return {rows:list, by, mode, dest:dest?dest[0]:null, total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
+  return {rows:list, by, mode:idx.exporter!=null?"ec_export":"import", total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
+}
+/* Devuelve {byIso:{ISO3:resultado}, unmatched:{destino:filas}, single:true|false} */
+function parsePenta(wb, fallbackIso){
+  const t=findTable(wb), data=t.rows.slice(t.hdr+1).filter(r=>r&&r.some(c=>c!=null&&c!==""));
+  if(t.idx.dest==null) return {byIso:{[fallbackIso]:aggregate(data,t.idx,t.H)}, unmatched:{}, single:true};
+  const groups={}, unmatched={};
+  for(const r of data){ const d=String(r[t.idx.dest]||"").trim(); const iso=destIso(d); if(iso&&BY3[iso]) (groups[iso]=groups[iso]||[]).push(r); else if(d) unmatched[d]=(unmatched[d]||0)+1; }
+  const byIso={}; for(const [iso,rs] of Object.entries(groups)) byIso[iso]=aggregate(rs,t.idx,t.H);
+  return {byIso, unmatched, single:Object.keys(byIso).length<=1};
 }
 
 /* ---------- publicar en GitHub ---------- */
@@ -128,7 +139,7 @@ function uploadBox(kind){
   return `<details class="pv-up" ${(!PRIV||!PRIV[kind]||!Object.keys(PRIV[kind]).length)?"open":""}><summary><b>Subir Excel y actualizar datos</b></summary>
     <form id="pv-upload" class="pv-form" data-kind="${kind}">
       <p class="src">Sube ${KIND[kind].file}.${kind==="procesadores"?" Un solo archivo actualiza los 40 mercados.":""}</p>
-      ${kind==="importadores"?`<label for="pv-country" class="src"><b>País del archivo</b></label><select id="pv-country" class="pv-in">${MARKETS.map(m=>`<option value="${m.iso3}" ${m.iso3===state.market.iso3?"selected":""}>${esc(m.name)}</option>`).join("")}</select>`:""}
+      ${kind==="importadores"?`<p class="src"><b>Recomendado:</b> en Penta, Ecuador → Exportación → partidas 1801–1806 → todos los destinos. Un solo Excel actualiza todos los mercados; la app lo reparte por "País de Destino".</p><label for="pv-country" class="src"><b>País del archivo</b> (solo si el Excel no trae columna de destino)</label><select id="pv-country" class="pv-in">${MARKETS.map(m=>`<option value="${m.iso3}" ${m.iso3===state.market.iso3?"selected":""}>${esc(m.name)}</option>`).join("")}</select>`:""}
       <label for="pv-file" class="src"><b>Archivo Excel</b> (.xls, .xlsx o .csv)</label>
       <input id="pv-file" type="file" accept=".xls,.xlsx,.csv" required class="pv-in">
       <label for="pv-token" class="src"><b>Token de GitHub</b> ${tok?"(ya guardado en este navegador; déjalo vacío)":"(solo la primera vez; queda guardado en este navegador)"}</label>
@@ -205,6 +216,8 @@ viewMarketReal = function(){
     <p class="src" style="margin-top:-12px">Procesadores: cuota de mercado (Euromonitor). Importadores: registros de aduana (Penta). Datos privados del equipo.</p>`;
   return html.replace(/<button class="cta" data-act="companies">[\s\S]*?<\/button>|<div class="notice info"><b>Empresas:<\/b>[\s\S]*?<\/div>/, cta);
 };
+const _viewMarketPending = viewMarketPending;
+viewMarketPending = function(){ return _viewMarketPending().replace(/<button class="ghost" data-act="pilot">[\s\S]*?<\/button>/, `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="cta" data-rank="procesadores">Procesadores <span>→</span></button><button class="cta" data-rank="importadores" style="background:var(--cacao-yellow)">Importadores <span>→</span></button></div>`); };
 const _render = render;
 render = function(){
   if(state.view==="companies"){ state.view="ranking"; state.rkind=state.rkind||(state.company&&state.company.type==="importador"?"importadores":"procesadores"); }
@@ -236,7 +249,14 @@ function bindPriv(){
     if(tok) ls.set("ek_gh_token",tok);
     try{ msg.textContent="Leyendo el Excel…"; const wb=await readBook(file); const now=new Date().toISOString().slice(0,10);
       if(kind==="procesadores"){ const p=parseEuromonitor(wb); PRIV.procesadores=p.markets; PRIV.volumen=p.volumen; PRIV.meta_proc={years:p.years,category:p.category,dataType:p.dataType,exported:p.exported,loaded:now,file:file.name}; MSG=`Leídos ${Object.keys(p.markets).length} mercados (${p.years.join(", ")}).`; }
-      else { const p=parsePenta(wb); let iso=$("#pv-country").value; const dm=p.dest&&MARKETS.find(x=>x.name.toLowerCase()===p.dest.toLowerCase()); if(dm) iso=dm.iso3; p.loaded=now; p.file=file.name; PRIV.importadores[iso]=p; MSG=`Leídos ${p.lines} registros y ${p.importers} importadores.`; if(iso!==state.market.iso3) state.market=BY3[iso]; }
+      else { const res=parsePenta(wb,$("#pv-country").value); const isos=Object.keys(res.byIso);
+        if(!isos.length) throw new Error("El Excel no trae envíos hacia ninguno de los 40 mercados.");
+        if(!res.single) PRIV.importadores={};
+        for(const iso of isos){ const p=res.byIso[iso]; p.loaded=now; p.file=file.name; PRIV.importadores[iso]=p; }
+        const lines=isos.reduce((a,i)=>a+res.byIso[i].lines,0), un=Object.keys(res.unmatched);
+        MSG = res.single ? `Leídos ${lines} registros y ${res.byIso[isos[0]].importers} compradores (${BY3[isos[0]].name}).` : `Leídos ${lines} registros: ${isos.length} mercados actualizados (${isos.map(i=>BY3[i].name).join(", ")}).`;
+        if(un.length) MSG+=` Destinos fuera de los 40 mercados, no incluidos: ${un.slice(0,8).join(", ")}${un.length>8?"…":""}.`;
+        if(!isos.includes(state.market.iso3)) state.market=BY3[isos[0]]; }
       msg.textContent=MSG+" Cifrando y publicando…";
       const clean=JSON.parse(JSON.stringify(PRIV,(k,v)=>k==="_top"?undefined:v)); const r=await publish(clean);
       if(r.ok) MSG+=" Publicado: el equipo lo verá en 1–2 minutos.";
