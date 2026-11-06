@@ -264,5 +264,39 @@ function bindPriv(){
     }catch(err){ MSG="Error: "+err.message; }
     render(); };
 }
+
+/* ---------- lista de mercados automática (calculada por el robot en imports.json) ---------- */
+const REG = {
+  "Europa":"AD AL AT BA BE BG BY CH CY CZ DE DK EE ES FI FR GB GR HR HU IE IS IT LI LT LU LV MC MD ME MK MT NL NO PL PT RO RS SE SI SK SM VA XK",
+  "Europa y Asia Central":"TR UA RU GE AM AZ KZ KG TJ TM UZ",
+  "Américas":"US CA MX GT BZ SV HN NI CR PA CU DO HT JM TT BS BB PR CO VE EC PE BO CL AR UY PY BR GY SR",
+  "Asia-Pacífico":"CN JP KR KP TW HK MO MN VN TH MY SG ID PH KH LA MM BN TL IN PK BD LK NP AU NZ PG FJ",
+  "Oriente Medio y África":"SA AE QA KW BH OM YE IQ IR IL JO LB SY PS EG LY TN DZ MA SD ZA NG GH CI CM KE ET TZ UG SN AO MZ ZW ZM NA BW MG MU"
+};
+const regionOf = iso2 => { for(const [r,l] of Object.entries(REG)) if(l.split(" ").includes(iso2)) return r; return "Otros mercados"; };
+let SELECTION = null;
+const esName = iso2 => { try{ return new Intl.DisplayNames(["es"],{type:"region"}).of(iso2); }catch(e){ return iso2; } };
+const enName = iso2 => { try{ return new Intl.DisplayNames(["en"],{type:"region"}).of(iso2); }catch(e){ return iso2; } };
+function centroidOf(iso2, iso3){ try{ const f=(features||[]).find(f=>f.properties.iso2===iso2||f.properties.iso3===iso3); if(f&&window.d3){ const c=d3.geoCentroid(f); if(isFinite(c[0])) return c; } }catch(e){} return null; }
+function applySelection(){
+  if(!SELECTION||!SELECTION.markets||!SELECTION.markets.length) return;
+  const old=Object.fromEntries(MARKETS.map(m=>[m.iso3,m]));
+  const list=SELECTION.markets.filter(x=>x.iso2&&x.iso3).map(x=>{ const o=old[x.iso3]; const c=o?[o.lon,o.lat]:centroidOf(x.iso2,x.iso3);
+    return {iso2:x.iso2, iso3:x.iso3, name:o?o.name:esName(x.iso2), region:o?o.region:regionOf(x.iso2), lon:c?c[0]:null, lat:c?c[1]:null, pilot:!!x.pilot, avgUsd:x.avgUsd, rank:x.rank}; });
+  if(!list.length) return;
+  MARKETS.splice(0, MARKETS.length, ...list);
+  Object.keys(BY2).forEach(k=>delete BY2[k]); Object.keys(BY3).forEach(k=>delete BY3[k]);
+  MARKETS.forEach(m=>{ BY2[m.iso2]=m; BY3[m.iso3]=m; EURO_NAMES[enName(m.iso2)]=EURO_NAMES[enName(m.iso2)]||m.iso3; });
+  if(typeof features!=="undefined" && features.length && document.querySelector("#map svg")){
+    MARKETS.forEach(m=>{ if(m.lon==null){ const c=centroidOf(m.iso2,m.iso3); if(c){m.lon=c[0];m.lat=c[1];} } });
+    $("#map").innerHTML=""; drawMap(); }
+}
+const _drawMap = drawMap;
+drawMap = function(){ MARKETS.forEach(m=>{ if(m.lon==null){ const c=centroidOf(m.iso2,m.iso3); m.lon=c?c[0]:0; m.lat=c?c[1]:-89; } }); _drawMap(); };
+const _renderMarkets = renderMarkets;
+renderMarkets = function(){ _renderMarkets(); const n=$("#mbody .notice");
+  if(n&&SELECTION) n.innerHTML=`<b>Top ${MARKETS.length} destinos del cacao ecuatoriano.</b> Elegidos automáticamente con datos de UN Comtrade (exportaciones de Ecuador, HS 1801–1806, promedio ${esc((SELECTION.years||[]).join(", "))}). Se recalcula solo cada mes. Turquía se mantiene como piloto. Actualizado: ${esc(SELECTION.generated||"—")}.`;
+  if(SELECTION) $("#mbody").querySelectorAll(".mrow").forEach(b=>{ const m=BY2[b.dataset.m]; if(m&&m.rank){ const sm=b.querySelector("small,.chip"); b.firstElementChild.textContent=`${m.rank}. ${m.name}`; } }); };
+fetch("imports.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{ if(j&&j.selection){ SELECTION=j.selection; applySelection(); } }).catch(()=>{});
 tryAutoUnlock();
 })();
