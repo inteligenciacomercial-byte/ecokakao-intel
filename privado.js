@@ -282,7 +282,7 @@ function applySelection(){
   if(!SELECTION||!SELECTION.markets||!SELECTION.markets.length) return;
   const old=Object.fromEntries(MARKETS.map(m=>[m.iso3,m]));
   const list=SELECTION.markets.filter(x=>x.iso2&&x.iso3).map(x=>{ const o=old[x.iso3]; const c=o?[o.lon,o.lat]:centroidOf(x.iso2,x.iso3);
-    return {iso2:x.iso2, iso3:x.iso3, name:o?o.name:esName(x.iso2), region:o?o.region:regionOf(x.iso2), lon:c?c[0]:null, lat:c?c[1]:null, pilot:!!x.pilot, avgUsd:x.avgUsd, rank:x.rank}; });
+    return {iso2:x.iso2, iso3:x.iso3, name:o?o.name:esName(x.iso2), region:o?o.region:regionOf(x.iso2), lon:c?c[0]:null, lat:c?c[1]:null, pilot:false, avgUsd:x.avgUsd, rank:x.rank}; });
   if(!list.length) return;
   MARKETS.splice(0, MARKETS.length, ...list);
   Object.keys(BY2).forEach(k=>delete BY2[k]); Object.keys(BY3).forEach(k=>delete BY3[k]);
@@ -295,8 +295,99 @@ const _drawMap = drawMap;
 drawMap = function(){ MARKETS.forEach(m=>{ if(m.lon==null){ const c=centroidOf(m.iso2,m.iso3); m.lon=c?c[0]:0; m.lat=c?c[1]:-89; } }); _drawMap(); };
 const _renderMarkets = renderMarkets;
 renderMarkets = function(){ _renderMarkets(); const n=$("#mbody .notice");
-  if(n&&SELECTION) n.innerHTML=`<b>Top ${MARKETS.length} destinos del cacao ecuatoriano.</b> Elegidos automáticamente con datos de UN Comtrade (exportaciones de Ecuador, HS 1801–1806, promedio ${esc((SELECTION.years||[]).join(", "))}). Se recalcula solo cada mes. Turquía se mantiene como piloto. Actualizado: ${esc(SELECTION.generated||"—")}.`;
+  if(n&&SELECTION) n.innerHTML=`<b>Top ${MARKETS.length} destinos del cacao ecuatoriano.</b> Elegidos automáticamente con datos de UN Comtrade (exportaciones de Ecuador, HS 1801–1806, promedio ${esc((SELECTION.years||[]).join(", "))}). Se recalcula solo cada mes. Actualizado: ${esc(SELECTION.generated||"—")}.`;
   if(SELECTION) $("#mbody").querySelectorAll(".mrow").forEach(b=>{ const m=BY2[b.dataset.m]; if(m&&m.rank){ const sm=b.querySelector("small,.chip"); b.firstElementChild.textContent=`${m.rank}. ${m.name}`; } }); };
 fetch("imports.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{ if(j&&j.selection){ SELECTION=j.selection; applySelection(); } }).catch(()=>{});
+
+
+/* Sin señalización de "piloto" */
+MARKETS.forEach(m=>m.pilot=false);
+(function(){ const h=document.querySelector("#hero p"); if(h) h.textContent="Busca un país o selecciona uno de los 40 mercados prioritarios.";
+  document.querySelectorAll("#hero .legend span").forEach(s=>{ if(/Piloto/.test(s.textContent)) s.remove(); }); })();
+/* ===== Búsqueda de países + foto pequeña ===== */
+const norm = t => (t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+(function addSearchUI(){
+  const st=document.createElement("style"); st.textContent=`
+  .srch{position:relative;width:min(260px,34vw)}
+  .srch input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px 7px 32px;font:inherit;font-size:13px;color:inherit}
+  .srch input:focus{outline:none;border-color:var(--cacao-orange)}
+  .srch .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+  .sres{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden auto;max-height:320px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .sres button{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 12px;font-size:13px;color:inherit}
+  .sres button:last-child{border-bottom:0}
+  .sres button:hover,.sres button.on{background:var(--surface-2)}
+  .sres small{color:var(--dim);font-size:11px;white-space:nowrap}
+  .sres small.mk{color:var(--cacao-orange)}
+  .cphoto{float:right;margin:0 0 8px 14px;width:112px}
+  .cphoto img{display:block;width:112px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--surface-2)}
+  .cphoto figcaption{font-size:10px;color:var(--dim);margin-top:4px;line-height:1.3}
+  .cphoto figcaption a{color:inherit}
+  .stoast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:13px}
+  @media (max-width:720px){ .top .brand span{display:none} .srch{width:auto;flex:1;min-width:0} .top .spacer{display:none} }`;
+  document.head.appendChild(st);
+  const box=document.createElement("div"); box.className="srch";
+  box.innerHTML=`<span class="ic">⌕</span><input type="search" id="srchIn" placeholder="Buscar país…" aria-label="Buscar país" autocomplete="off"><div class="sres" id="srchRes" hidden></div>`;
+  const top=document.querySelector(".top"), anchor=document.getElementById("btnMarkets"); top.insertBefore(box, anchor);
+  const inp=box.querySelector("input"), res=box.querySelector(".sres");
+  let items=[], sel=0;
+  function allCountries(){
+    const out=new Map();
+    MARKETS.forEach(m=>out.set(m.iso2,{iso2:m.iso2,name:m.name,market:m}));
+    (features||[]).forEach(f=>{ const i2=f.properties.iso2; if(!i2||out.has(i2)) return; const n=esName(i2); out.set(i2,{iso2:i2,name:(n&&n!==i2)?n:f.properties.name,feature:f}); });
+    return [...out.values()];
+  }
+  function show(){
+    const q=norm(inp.value); if(!q){ res.hidden=true; return; }
+    items=allCountries().map(c=>({c, n:norm(c.name), e:norm(enName(c.iso2))})).filter(x=>x.n.includes(q)||x.e.includes(q))
+      .sort((a,b)=>(b.n.startsWith(q)-a.n.startsWith(q))||(!!b.c.market-!!a.c.market)||a.n.localeCompare(b.n)).slice(0,8).map(x=>x.c);
+    sel=0;
+    res.innerHTML = items.length ? items.map((c,i)=>`<button data-i="${i}" class="${i===0?"on":""}"><span>${esc(c.name)}</span>${c.market?`<small class="mk">${c.market.rank?"#"+c.market.rank+" · ":""}Mercado prioritario</small>`:"<small>Fuera de los 40</small>"}</button>`).join("") : `<button disabled><span>Sin resultados</span></button>`;
+    res.hidden=false;
+    res.querySelectorAll("[data-i]").forEach(b=>b.onmousedown=e=>{ e.preventDefault(); pick(items[+b.dataset.i]); });
+  }
+  function pick(c){
+    if(!c) return; inp.value=""; res.hidden=true; inp.blur();
+    if(c.market){ openMarket(c.market); return; }
+    if(typeof closePanel==="function" && $("#panel").classList.contains("open")) $("#panel").classList.remove("open");
+    focusFeature(c.feature);
+    toast(`${c.name} no está entre los 40 mercados prioritarios.`);
+  }
+  inp.addEventListener("input",show);
+  inp.addEventListener("focus",show);
+  inp.addEventListener("blur",()=>setTimeout(()=>res.hidden=true,150));
+  inp.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){ e.preventDefault(); pick(items[sel]); }
+    else if(e.key==="Escape"){ inp.value=""; res.hidden=true; }
+    else if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); if(!items.length) return; sel=(sel+(e.key==="ArrowDown"?1:-1)+items.length)%items.length; res.querySelectorAll("[data-i]").forEach((b,i)=>b.classList.toggle("on",i===sel)); }
+  });
+})();
+function focusFeature(f){
+  if(!svg||!f) return;
+  g.selectAll(".country").classed("active",x=>x===f);
+  const el=$("#map"); const w=el.clientWidth,h=el.clientHeight;
+  let [[x0,y0],[x1,y1]]=path.bounds(f);
+  if((x1-x0)>w*0.5){ const p=projection(d3.geoCentroid(f)); x0=p[0]-90;x1=p[0]+90;y0=p[1]-60;y1=p[1]+60; }
+  const k=Math.min(8,0.55/Math.max((x1-x0)/w,(y1-y0)/h)); const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  svg.transition().duration(750).call(zoom.transform,d3.zoomIdentity.translate(w/2-k*cx,h/2-k*cy).scale(k));
+}
+let toastT; function toast(t){ let e=document.querySelector(".stoast"); if(!e){ e=document.createElement("div"); e.className="stoast"; document.body.appendChild(e); } e.textContent=t; e.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>e.hidden=true,3500); }
+/* Foto pequeña del país: imagen de su capital en Wikimedia Commons (vía Wikidata) */
+const PHOTO={};
+function photoFor(iso2){
+  if(PHOTO[iso2]) return PHOTO[iso2];
+  const q=`SELECT ?img ?cimg ?capLabel WHERE { ?c wdt:P297 "${iso2}". OPTIONAL{ ?c wdt:P36 ?cap. ?cap wdt:P18 ?img. } OPTIONAL{ ?c wdt:P18 ?cimg. } SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". } } LIMIT 5`;
+  PHOTO[iso2]=fetch("https://query.wikidata.org/sparql?format=json&query="+encodeURIComponent(q),{headers:{Accept:"application/sparql-results+json"}})
+    .then(r=>r.json()).then(j=>{ const b=j.results.bindings; const x=b.find(r=>r.img)||b.find(r=>r.cimg); if(!x) return null;
+      const u=(x.img||x.cimg).value.replace(/^http:/,"https:"); const file=decodeURIComponent(u.split("/Special:FilePath/")[1]||"");
+      return {src:u+"?width=260", page:"https://commons.wikimedia.org/wiki/File:"+encodeURIComponent(file), cap:x.img&&x.capLabel?x.capLabel.value:""}; })
+    .catch(()=>null);
+  return PHOTO[iso2];
+}
+const _render2=render;
+render=function(){ _render2(); if(state.view!=="market"||!state.market) return; const m=state.market;
+  photoFor(m.iso2).then(p=>{ if(!p||state.view!=="market"||state.market!==m) return; const head=$("#pbody").firstElementChild; if(!head||head.querySelector(".cphoto")) return;
+    const fig=document.createElement("figure"); fig.className="cphoto";
+    fig.innerHTML=`<img src="${esc(p.src)}" alt="${esc(p.cap||m.name)}" loading="lazy"><figcaption>${p.cap?esc(p.cap)+" · ":""}<a href="${esc(p.page)}" target="_blank" rel="noopener">Wikimedia Commons</a></figcaption>`;
+    fig.querySelector("img").onerror=()=>fig.remove(); head.insertBefore(fig, head.firstChild); }); };
 tryAutoUnlock();
 })();
