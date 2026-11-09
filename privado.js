@@ -506,5 +506,21 @@ let aplT; function aplPoll(){
 }
 const _bindPriv2 = bindPriv;
 bindPriv = function(){ _bindPriv2(); if($("#apl")) aplLoad(); };
+
+/* ===== Ajustes de calidad en la vista de país ===== */
+const ISO32=Object.fromEntries("ABWAW,AFGAF,AGOAO,AIAAI,ALAAX,ALBAL,ANDAD,AREAE,ARGAR,ARMAM,ASMAS,ATAAQ,ATFTF,ATGAG,AUSAU,AUTAT,AZEAZ,BDIBI,BELBE,BENBJ,BESBQ,BFABF,BGDBD,BGRBG,BHRBH,BHSBS,BIHBA,BLMBL,BLRBY,BLZBZ,BMUBM,BOLBO,BRABR,BRBBB,BRNBN,BTNBT,BVTBV,BWABW,CAFCF,CANCA,CCKCC,CHECH,CHLCL,CHNCN,CIVCI,CMRCM,CODCD,COGCG,COKCK,COLCO,COMKM,CPVCV,CRICR,CUBCU,CUWCW,CXRCX,CYMKY,CYPCY,CZECZ,DEUDE,DJIDJ,DMADM,DNKDK,DOMDO,DZADZ,ECUEC,EGYEG,ERIER,ESHEH,ESPES,ESTEE,ETHET,FINFI,FJIFJ,FLKFK,FRAFR,FROFO,FSMFM,GABGA,GBRGB,GEOGE,GGYGG,GHAGH,GIBGI,GINGN,GLPGP,GMBGM,GNBGW,GNQGQ,GRCGR,GRDGD,GRLGL,GTMGT,GUFGF,GUMGU,GUYGY,HKGHK,HMDHM,HNDHN,HRVHR,HTIHT,HUNHU,IDNID,IMNIM,INDIN,IOTIO,IRLIE,IRNIR,IRQIQ,ISLIS,ISRIL,ITAIT,JAMJM,JEYJE,JORJO,JPNJP,KAZKZ,KENKE,KGZKG,KHMKH,KIRKI,KNAKN,KORKR,KWTKW,LAOLA,LBNLB,LBRLR,LBYLY,LCALC,LIELI,LKALK,LSOLS,LTULT,LUXLU,LVALV,MACMO,MAFMF,MARMA,MCOMC,MDAMD,MDGMG,MDVMV,MEXMX,MHLMH,MKDMK,MLIML,MLTMT,MMRMM,MNEME,MNGMN,MNPMP,MOZMZ,MRTMR,MSRMS,MTQMQ,MUSMU,MWIMW,MYSMY,MYTYT,NAMNA,NCLNC,NERNE,NFKNF,NGANG,NICNI,NIUNU,NLDNL,NORNO,NPLNP,NRUNR,NZLNZ,OMNOM,PAKPK,PANPA,PCNPN,PERPE,PHLPH,PLWPW,PNGPG,POLPL,PRIPR,PRKKP,PRTPT,PRYPY,PSEPS,PYFPF,QATQA,REURE,ROURO,RUSRU,RWARW,SAUSA,SDNSD,SENSN,SGPSG,SGSGS,SHNSH,SJMSJ,SLBSB,SLESL,SLVSV,SMRSM,SOMSO,SPMPM,SRBRS,SSDSS,STPST,SURSR,SVKSK,SVNSI,SWESE,SWZSZ,SXMSX,SYCSC,SYRSY,TCATC,TCDTD,TGOTG,THATH,TJKTJ,TKLTK,TKMTM,TLSTL,TONTO,TTOTT,TUNTN,TURTR,TUVTV,TWNTW,TZATZ,UGAUG,UKRUA,UMIUM,URYUY,USAUS,UZBUZ,VATVA,VCTVC,VENVE,VGBVG,VIRVI,VNMVN,VUTVU,WLFWF,WSMWS,YEMYE,ZAFZA,ZMBZM,ZWEZW".split(",").map(x=>[x.slice(0,3),x.slice(3)]));
+EURO_NAMES["Hong Kong, China"]="HKG"; EURO_NAMES["Hong Kong"]="HKG";
+const _vmr2=viewMarketReal;
+viewMarketReal=function(){
+  let h=_vmr2(); const m=state.market, d=REAL[m.iso3]; if(!d) return h;
+  const years=d.years||[], y=years.includes(state.year)?state.year:d.latestYear, Y=d.byYear[String(y)]||{};
+  for(const o of (Y.origins1801||[])){ const i2=ISO32[o.iso3]; if(!i2) continue; const es=esName(i2); if(es&&es!==o.name) h=h.split(">"+esc(o.name)+"</span><div class=\"bar\">").join(">"+esc(es)+"</span><div class=\"bar\">"); }
+  h=h.replace("datos declarados por "+esc(d.reporterDesc)+" ","datos declarados por "+(d.mirror?"sus socios comerciales":esc(m.name))+" ");
+  const maxY=Math.max(...Object.values(REAL).map(x=>x.latestYear||0));
+  if(d.latestYear<maxY){ const miss=[]; for(let k=d.latestYear+1;k<=maxY;k++) miss.push(k);
+    h=h.replace('<div class="filters">','<div class="notice info">'+esc(m.name)+' todavía no ha reportado a UN Comtrade sus importaciones de '+miss.join(" y ")+'. Se muestra el último año disponible ('+d.latestYear+'). El robot lo añadirá solo cuando se publique.</div><div class="filters">'); }
+  h=h.replace(/(\d)\.(\d)%/g,"$1,$2 %");
+  return h;
+};
 tryAutoUnlock();
 })();
