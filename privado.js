@@ -79,10 +79,12 @@ function findTable(wb){
 }
 function aggregate(rows, idx, H){
   const agg={}; let tot=0, totKg=0, n=0, minD=null, maxD=null;
-  for(const r of rows){ const nm=String(r[idx.name]||"").trim(); if(!nm||/^total/i.test(nm)) continue;
+  let ndOps=0, ndUsd=0, ndKg=0;
+  for(const r of rows){ const nm=String(r[idx.name]||"").trim(); if(/^total/i.test(nm)) continue;
     const usd=idx.usd!=null?num(r[idx.usd])||0:0, kg=idx.kg!=null?num(r[idx.kg])||0:0; if(!usd&&!kg) continue;
+    if(badBuyer(nm)){ ndOps++; ndUsd+=usd; ndKg+=kg; tot+=usd; totKg+=kg; n++; continue; }
     const words=nm.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
-    const key=words.slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{},dests:{}};
+    const cw=words.filter(w=>!LEGAL_WORDS.has(w)); const key=(cw.length?cw:words).slice(0,2).join(" ")||nm.toUpperCase(); const a=agg[key]=agg[key]||{usd:0,kg:0,ops:0,origins:{},hs:{},exporters:{},names:{},dests:{}};
     a.names[nm]=(a.names[nm]||0)+1;
     if(idx.exporter!=null){ const ex=String(r[idx.exporter]||"").trim(); if(ex) a.exporters[ex]=(a.exporters[ex]||0)+(usd||kg); }
     if(idx.dest!=null){ const dd=String(r[idx.dest]||"").trim(); if(dd) a.dests[dd]=(a.dests[dd]||0)+(usd||kg); }
@@ -91,14 +93,27 @@ function aggregate(rows, idx, H){
     if(idx.hs!=null){ const h=String(r[idx.hs]||"").replace(/\D/g,"").slice(0,4); if(h) a.hs[h]=1; }
     if(idx.date!=null){ let d=r[idx.date]; if(typeof d==="number"&&d>20000&&d<80000){ d=new Date(Math.round((d-25569)*864e5)).toISOString().slice(0,10); } d=d?String(d).slice(0,10):null; if(d){ if(!minD||d<minD)minD=d; if(!maxD||d>maxD)maxD=d; } } }
   const by = tot>0 ? "usd" : "kg", T = tot>0 ? tot : totKg;
+  /* une variantes del mismo comprador ("CACAOTEC" y "CACAOTEC SAS", "NUTRIART" y "NUTRIART SEC") */
+  for(const k of Object.keys(agg)){ if(k.includes(" ")) continue; const into=Object.keys(agg).filter(x=>x!==k&&x.split(" ")[0]===k);
+    if(into.length===1){ const A=agg[into[0]], B=agg[k]; A.usd+=B.usd; A.kg+=B.kg; A.ops+=B.ops;
+      for(const f of ["origins","hs","exporters","names","dests"]) for(const [x,v] of Object.entries(B[f])) A[f][x]=(A[f][x]||0)+v; delete agg[k]; } }
   const list=Object.values(agg).sort((a,b)=>b[by]-a[by]).slice(0,15).map(a=>{ const ot=Object.values(a.origins).reduce((x,y)=>x+y,0)||1;
     const et=Object.values(a.exporters).reduce((x,y)=>x+y,0)||1; const nmBest=Object.entries(a.names).sort((x,y)=>y[1]-x[1]||y[0].length-x[0].length)[0][0];
-    return {name:nmBest, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
+    return {name:nmBest, logistics:LOGISTICS.test(normC(nmBest))||undefined, usd:Math.round(a.usd), kg:Math.round(a.kg), ops:a.ops, share:T?a[by]/T*100:0, hs:Object.keys(a.hs).sort(),
       dests:(()=>{const dt=Object.values(a.dests).reduce((x,y)=>x+y,0)||1; return Object.entries(a.dests).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/dt*100}));})(),
       exporters:Object.entries(a.exporters).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/et*100})),
       origins:Object.entries(a.origins).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([o,v])=>({name:o,share:v/ot*100}))}; });
-  return {rows:list, by, mode:idx.exporter!=null?"ec_export":"import", total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
+  return {rows:list, by, mode:idx.exporter!=null?"ec_export":"import", total:T, totalUsd:Math.round(tot), totalKg:Math.round(totKg), lines:n, unnamed:ndOps?{ops:ndOps,usd:Math.round(ndUsd),kg:Math.round(ndKg)}:null, from:minD, to:maxD, columns:Object.fromEntries(Object.entries(idx).map(([k,j])=>[k,H[j]])), importers:Object.keys(agg).length};
 }
+/* Nombres que no son un comprador real (la aduana a veces registra el país o un texto genérico) */
+const LEGAL_WORDS=new Set("S A SA SAS SAC SAA SL SRL SPA LTD LTDA LIMITED LLC LLP INC CORP CO COMPANY GMBH AG KG BV NV PTE SDN BHD PLC PTY PVT OY OU AS AB TBK PT KK SAIC SAU SE C SEC CIA Y DE CV RL E I A V".split(" "));
+const LOGISTICS=/natie\b|\b(steinweg|ceva|cwt|vollers|henry bath|access world|interporto|logika|genco|masstrans|dependable distribution|logistic|logistics|freight|shipping|warehousing|forwarding|airlines)\b/i;
+function badBuyer(nm){ const c=normC(nm); if(!c||c.length<3) return true;
+  if(/^(to order|to the order|a la orden|varios|various|n a|na|sin nombre|desconocido|unknown|same as consignee|consignatario|null|none|no disponible|empty field)$/.test(c)) return true;
+  return !!destIso(nm) || c==="ecuador"; }
+const NOT_BUYER=/natie\b|\b(logistic|logistics|steinweg|ceva|airline|airlines|shipping|freight|cargo|transport|transporte|transportes|warehouse|warehousing|almacen|almacenes|forwarding|forwarder|customs|aduanas?|courier|dhl|fedex|kuehne|dsv|maersk|agencia|agency|distribution services|inmobiliaria|hotel|resort|resorts)\b/i;
+const COMPANY_HINT=/\b(ltd|limited|llc|llp|inc|corp|corporation|co|company|gmbh|ag|kg|bv|nv|sa|sas|sarl|sl|spa|srl|sac|saa|ltda|pte|sdn|bhd|plc|pty|pvt|oy|ou|as|ab|tbk|pt|kk|trading|traders?|foods?|cocoa|cacao|kakao|chocolate|chocolates|confection\w*|industr\w*|group|holding|import\w*|export\w*|enterprises?|international|commodit\w*|coop\w*|gida|sanayi|ticaret|manufactur\w*|ingredients?)\b/i;
+const LEGAL_CC=[[/\bpte\b/i,["SGP"]],[/\bsdn\b|\bbhd\b/i,["MYS"]],[/\bgmbh\b/i,["DEU","AUT","CHE"]],[/\bb ?v\b/i,["NLD","BEL"]],[/\bde c ?v\b/i,["MEX"]],[/\bsp z o ?o\b/i,["POL"]],[/\bpvt\b/i,["IND"]],[/\bpty\b/i,["AUS","ZAF"]],[/\bsac\b|\bsaa\b|\beirl\b/i,["PER"]],[/\bou\b/i,["EST"]],[/\btbk\b|^pt\b/i,["IDN"]],[/\bplc\b/i,["GBR","IRL"]],[/\bs ?l\b|\bsociedad limitada\b/i,["ESP"]],[/\bsoc coop\b|\bimpresa sociale\b|\bs ?p ?a\b|\bs ?r ?l\b/i,["ITA","ARG","DOM","BOL","URY","PER","CHL"]],[/\bsarl\b/i,["FRA","TUN","DZA","BEL","LUX","MAR"]],[/\bs ?a ?s\b/i,["FRA","COL","DOM","ARG","PER"]]];
 const HQ_EXTRA={USA:["USA","U.S.A","UNITED STATES"],GBR:["UNITED KINGDOM","ENGLAND"],NLD:["NETHERLANDS","HOLLAND"],KOR:["KOREA"],ARE:["UAE","DUBAI"],HKG:["HONG KONG"],LVA:["LATVIA","RIGA"],PHL:["PHILIPPINES","MANILA"],SGP:["SINGAPORE"],RUS:["RUSSIA","RUSSIAN FEDERATION"],TUR:["TURKEY","TURKIYE"],CZE:["CZECH"]};
 function hqPatterns(){ return MARKETS.map(m=>{ const names=[...new Set([enName(m.iso2),esName(m.iso2),m.name,...(HQ_EXTRA[m.iso3]||[])].map(x=>normC(x).toUpperCase()).filter(x=>x&&x.length>2))];
   return {iso:m.iso3, re:new RegExp("\\b("+names.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")\\b","g")}; }); }
@@ -114,8 +129,16 @@ function parsePenta(wb, fallbackIso){
   /* Sede del comprador según su dirección (para quien compra desde un país y recibe en otro) */
   const ac=[t.idx.name-1,t.idx.name+1].filter(j=>j>=0&&/direcci|address|domicilio/i.test(t.H[j]||""));
   const hq={};
-  if(ac.length){ const pats=hqPatterns();
-    for(const r of data){ const iso=hqIso(ac.map(j=>r[j]).join(" | "),pats); const di=destIso(String(r[t.idx.dest]||"")); if(iso&&iso!==di) (hq[iso]=hq[iso]||[]).push(r); } }
+  if(ac.length){ const pats=hqPatterns(), by={};
+    for(const r of data){ const nm=String(r[t.idx.name]||"").trim(); if(!nm||badBuyer(nm)) continue;
+      const key=normC(nm).split(" ").slice(0,2).join(" "); (by[key]=by[key]||{nm,rows:[],votes:{}}).rows.push(r);
+      const di=destIso(String(r[t.idx.dest]||"")); const iso=hqIso(ac.map(j=>r[j]).join(" | "),pats); if(iso&&iso!==di) by[key].votes[iso]=(by[key].votes[iso]||0)+1; }
+    for(const g of Object.values(by)){ const n=normC(g.nm);
+      if(NOT_BUYER.test(n)||!COMPANY_HINT.test(n)) continue;              /* operadores logísticos o personas: fuera */
+      const [iso,v]=Object.entries(g.votes).sort((a,b)=>b[1]-a[1])[0]||[]; if(!iso) continue;
+      if(v<2||v/g.rows.length<0.6) continue;                              /* la dirección debe repetirse en la mayoría de envíos */
+      const lf=LEGAL_CC.find(([re])=>re.test(n)); if(lf&&!lf[1].includes(iso)) continue; /* forma legal de otro país */
+      for(const r of g.rows){ const di=destIso(String(r[t.idx.dest]||"")); if(di!==iso) (hq[iso]=hq[iso]||[]).push(r); } } }
   const hqAgg={}; for(const [iso,rs] of Object.entries(hq)) hqAgg[iso]=aggregate(rs,t.idx,t.H);
   return {byIso, hq:hqAgg, unmatched, single:Object.keys(byIso).length<=1};
 }
@@ -198,9 +221,10 @@ function viewRanking(){
         <div class="kpi"><div class="l">Total del período</div><div class="v">${by==="usd"?fmt1(d.totalUsd/1e6)+" <small>USD M</small>":fmtInt(d.totalKg/1000)+" <small>t</small>"}</div></div></div>
       <div class="list">${d.rows.slice(0,10).map((r,i)=>`<button class="item pv-row" data-pco="importadores|${i}" style="grid-template-columns:28px minmax(0,1fr) auto">
           <span class="n">${String(i+1).padStart(2,"0")}</span>
-          <span><div class="t">${esc(r.name)}</div>${bar(r.share,max,"var(--cacao-yellow)")}<div class="s">${(r.exporters&&r.exporters.length)?"Le venden: "+r.exporters.map(x=>`${esc(x.name)} ${fmt1(x.share)} %`).join(" · "):""}${r.origins.map(o=>`${o.name==="ECUADOR"||/ecuador/i.test(o.name)?"<b style=\"color:var(--cacao-green)\">"+esc(o.name)+"</b>":esc(o.name)} ${fmt1(o.share)} %`).join(" · ")||""}${r.hs.length?` · HS ${r.hs.join(", ")}`:""}</div></span>
+          <span><div class="t">${esc(r.name)}${r.logistics?' <small style="color:var(--cacao-orange);font-weight:400">· operador logístico / almacén</small>':""}</div>${bar(r.share,max,"var(--cacao-yellow)")}<div class="s">${(r.exporters&&r.exporters.length)?"Le venden: "+r.exporters.map(x=>`${esc(x.name)} ${fmt1(x.share)} %`).join(" · "):""}${r.origins.map(o=>`${o.name==="ECUADOR"||/ecuador/i.test(o.name)?"<b style=\"color:var(--cacao-green)\">"+esc(o.name)+"</b>":esc(o.name)} ${fmt1(o.share)} %`).join(" · ")||""}${r.hs.length?` · HS ${r.hs.join(", ")}`:""}</div></span>
           <span style="text-align:right"><div class="mono" style="font-size:16px">${fmt1(r.share)} %</div><div class="src mono">${by==="usd"?"USD "+fmtInt(r.usd/1000)+" mil":fmtInt(r.kg/1000)+" t"}</div></span></button>`).join("")}</div>
       <p class="src"><b>Fuente:</b> ${K.src}${ec?" (Ecuador, exportaciones)":""}. Período: ${esc(d.from||"—")} a ${esc(d.to||"—")}. Cuota sobre el total del archivo, en ${by==="usd"?"valor":"peso"}. Cargado: ${esc(d.loaded||"—")}.</p>
+      ${d.unnamed?`<p class="src">${fmtInt(d.unnamed.ops)} operaciones${d.unnamed.usd?" (USD "+fmtInt(d.unnamed.usd/1000)+" mil)":""} no traen el nombre del comprador en la declaración de aduana (vienen como "No disponible" o con el nombre del país). Cuentan en el total, pero no en el ranking.</p>`:""}
       <p class="src">Columnas leídas: ${Object.entries(d.columns).map(([k,v])=>`${k} = "${esc(v)}"`).join(" · ")}</p>`;
     }
     if(d&&d.hq&&d.hq.rows.length){ const h=d.hq, mx=Math.max(...h.rows.slice(0,10).map(r=>r.share),1);
@@ -222,7 +246,7 @@ function rankCompany(kind,i){
   if(kind==="hq"){ const r=PRIV.importadores[m.iso3].hq.rows[i];
     return {id:`${m.iso3}-H-${i}`, name:r.name, type:"importador", city:m.name, what:`Comprador de cacao ecuatoriano con sede en ${m.name} según su dirección en aduana; la mercancía se envía a ${r.dests.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"otro país"} (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")+".":""}`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:"Penta-Transaction (aduana de Ecuador, exportaciones)", sourceDate:`${r.from||PRIV.importadores[m.iso3].hq.from||""} a ${PRIV.importadores[m.iso3].hq.to||""}`}; }
   const r=d.rows[i];
-  return {id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
+  return {id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${r.logistics?"Operador logístico o almacén: recibe la carga, pero el comprador final puede ser otra empresa. ":""}${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
 }
 
 /* ---------- integración con la app ---------- */
