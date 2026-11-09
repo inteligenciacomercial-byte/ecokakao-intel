@@ -449,7 +449,12 @@ function aplPerson(p, rv){
 function aplDraw(){
   const box=$("#apl"); if(!box) return; const c=state.company, k=c.name+"|"+state.market.iso2, d=APL[k];
   if(!d) return; if(d.error){ box.innerHTML=`<div class="notice">No se pudo consultar Apollo: ${esc(d.error)}</div>`; return; }
-  if(!d.org){ box.innerHTML=`<div class="notice info">Apollo no encontró esta empresa con ese nombre. Prueba buscarla a mano en <a href="https://app.apollo.io/#/companies?qOrganizationName=${encodeURIComponent(c.name)}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">Apollo ↗</a>.</div>`; return; }
+  if(!d.org){ const cs=d.candidates||[];
+    box.innerHTML=`<div class="notice info">Apollo no encontró una coincidencia segura para <b>${esc(c.name)}</b>.${cs.length?" ¿Es alguna de estas? Elegir no gasta créditos de email.":" Prueba buscarla a mano en <a href=\"https://app.apollo.io/#/companies?qOrganizationName="+encodeURIComponent(c.name)+"\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--cacao-yellow)\">Apollo ↗</a>."}</div>
+      ${cs.map(o=>`<div class="pv-row" style="border-bottom:1px solid var(--line);padding:10px 0;display:flex;justify-content:space-between;gap:10px;align-items:center"><span><b>${esc(o.name)}</b><br><small style="color:var(--muted)">${esc([o.domain&&o.domain.replace(/^https?:\/\//,""),o.country].filter(Boolean).join(" · ")||"sin web")}</small></span><button class="ghost" data-pick="${esc(o.id)}" data-pname="${esc(o.name)}" style="padding:5px 10px;font-size:12px;white-space:nowrap">Es esta</button></div>`).join("")}`;
+    box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{ b.disabled=true; b.textContent="Cargando…"; const k=c.name+"|"+state.market.iso2;
+      try{ const j=await apl("/people",{company:c.name,country:enName(state.market.iso2),org_id:b.dataset.pick,org_name:b.dataset.pname}); APL[k]={org:j.org,people:j.people||[],rv:{}}; }catch(e){ APL[k]={error:e.message}; } aplDraw(); });
+    return; }
   box.innerHTML=`<div class="def">Empresa en Apollo: <b style="color:var(--fg)">${esc(d.org.name)}</b>${d.org.domain?" · "+esc(d.org.domain.replace(/^https?:\/\//,"")):""}. Revela solo a quien vayas a contactar: el plan gratis trae 75 créditos al mes.</div>
     ${d.people.length?d.people.map(p=>aplPerson(p,d.rv[p.id])).join(""):'<p class="lead">No hay personas de compras registradas para esta empresa.</p>'}
     <p class="src">Fuente: Apollo.io. Solo datos profesionales. Lo ya revelado queda guardado para el equipo y no se vuelve a pagar.</p>`;
@@ -459,7 +464,7 @@ function aplDraw(){
 }
 async function aplLoad(){
   const c=state.company, k=c.name+"|"+state.market.iso2;
-  if(!APL[k]){ try{ const j=await apl("/people",{company:c.name,country:enName(state.market.iso2)}); APL[k]={org:j.org,people:j.people||[],rv:{}};
+  if(!APL[k]){ try{ const j=await apl("/people",{company:c.name,country:enName(state.market.iso2)}); APL[k]={org:j.org,people:j.people||[],rv:{},candidates:j.candidates||[]};
       await Promise.all((j.people||[]).map(async p=>{ try{ const r=await apl("/contact",{id:p.id}); if(r&&r.emailStatus) APL[k].rv[p.id]=r; }catch(e){} }));
     }catch(e){ APL[k]={error:e.message}; } }
   aplDraw(); aplPoll();
