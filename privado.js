@@ -480,7 +480,8 @@ function aplDraw(){
       try{ const j=await apl("/people",{company:c.name,country:enName(state.market.iso2),org_id:b.dataset.pick,org_name:b.dataset.pname}); APL[k]={org:j.org,people:j.people||[],rv:{}}; }catch(e){ APL[k]={error:e.message}; } aplDraw(); });
     return; }
   box.innerHTML=`<div class="def">Empresa en Apollo: <b style="color:var(--fg)">${esc(d.org.name)}</b>${d.org.domain?" · "+esc(d.org.domain.replace(/^https?:\/\//,"")):""}. Revela solo a quien vayas a contactar: el plan gratis trae 75 créditos al mes.</div>
-    ${d.people.length?d.people.map(p=>aplPerson(p,d.rv[p.id])).join(""):'<p class="lead">No hay personas de compras registradas para esta empresa.</p>'}
+    ${d.people.length&&d.people[0].group==="direccion"?'<div class="notice info">Apollo no tiene a nadie de compras en esta empresa. Estos son sus <b>directivos</b> (gerencia, dueños, exportación): en empresas medianas suelen decidir las compras.</div>':""}
+    ${d.people.length?d.people.map(p=>aplPerson(p,d.rv[p.id])).join(""):'<p class="lead">Apollo no tiene personas de compras ni directivos registrados para esta empresa.</p>'}
     <p class="src">Fuente: Apollo.io. Solo datos profesionales. Lo ya revelado queda guardado para el equipo y no se vuelve a pagar.</p>`;
   box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.reveal,false,b));
   box.querySelectorAll("[data-rphone]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.rphone,true,b));
