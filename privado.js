@@ -416,7 +416,7 @@ render=function(){ _render2(); if(state.view!=="market"||!state.market) return; 
     fig.querySelector("img").onerror=()=>fig.remove(); head.insertBefore(fig, head.firstChild); }); };
 
 /* ===== Contactos reales vía Apollo (se activa al poner APOLLO_URL) ===== */
-const APOLLO_URL = "";   // URL del intermediario de Cloudflare. Vacío = botones ocultos.
+const APOLLO_URL = "https://ecokakao-apollo.inteligencia-comercial.workers.dev";   // URL del intermediario de Cloudflare. Vacío = botones ocultos.
 const APL = {};
 async function teamHash(){ const d=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(PW||"")); return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
 async function apl(path, body){
