@@ -722,4 +722,56 @@ function confirmDel(b){ if(b.dataset.sure) return true; b.dataset.sure="1"; b.te
 setInterval(()=>{ if(PW&&!PIPE_SYNC) pipeLoad(); else if(PIPE_SYNC&&$("#ppanel").classList.contains("open")&&!document.getElementById("pipeBody")?.contains(document.activeElement)) pipeLoad(); },60000);
 (function waitPw(n){ if(PW) pipeLoad(); else if(n<120) setTimeout(()=>waitPw(n+1),1000); })(0);
 pipeBadge();
+
+/* ===== Requisitos para exportar (información pública, revisada el 10 nov 2026) ===== */
+const REQ_DATE="10 nov 2026";
+const EU27=["AUT","BEL","BGR","HRV","CYP","CZE","DNK","EST","FIN","FRA","DEU","GRC","HUN","IRL","ITA","LVA","LTU","LUX","MLT","NLD","POL","PRT","ROU","SVK","SVN","ESP","SWE"];
+const L=(t,u)=>`<a href="${u}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">${t} ↗</a>`;
+const SRC={
+  euAgr:L("Acuerdo UE–Ecuador (Reglamento (UE) 2017/754)","https://www.legislation.gov.uk/eur/2017/754/introduction"),
+  a2m:L("Access2Markets (arancel exacto por código)","https://trade.ec.europa.eu/access-to-markets/en/home"),
+  eudr:L("EY, 20 ene 2026","https://taxnews.ey.com/news/2026-0237-eu-deforestation-regulation-application-postponed-to-30-december-2026"),
+  eudr2:L("Comisión Europea, paquete del 4 may 2026","https://www.globalelr.com/2026/05/european-commission-releases-new-eu-deforestation-regulation-measures/"),
+  risk:L("Clasificación de países EUDR","https://www.compliancegate.com/eudr-country-risk-classification/"),
+  cd:L("Límites UE de contaminantes en cacao","https://daarnhouwer.com/knowledge-center/european-union-limits-contaminants-cacao-chocolate/"),
+  pest:L("Base de datos de plaguicidas de la UE","https://food.ec.europa.eu/plants/pesticides/eu-pesticides-database_en"),
+  uk:L("Acuerdo comercial Reino Unido–Andinos","https://www.gov.uk/guidance/summary-of-uk-andean-countries-trade-agreement"),
+  fda:L("FDA: importar alimentos","https://www.fda.gov/food/food-imports-exports/importing-food-products-united-states"),
+  usimp:L("Requisitos para importar cacao en grano a EE. UU.","https://usacustomsclearance.com/process/how-to-import-cocoa-beans/"),
+  usag:L("Exención agrícola, 13 nov 2025","https://www.strtrade.com/trade-news-resources/str-trade-report/trade-report/november/u-s-removes-reciprocal-tariffs-on-food-products-announces-new-agreements"),
+  ustar:L("Seguimiento de aranceles EE. UU. 2026","https://dimerco.com/us-tariff-update-2026/"),
+  cn:L("Decreto 280 de aduanas de China","https://www.china-briefing.com/news/gac-overseas-food-manufacturer-registration-china-new-rules-2026/"),
+  cnfta:L("Acuerdo Ecuador–China","https://elmercurio.com.ec/?p=1083188"),
+  macmap:L("Market Access Map (ITC): arancel para Ecuador","https://www.macmap.org/"),
+  agro:L("Agrocalidad (certificado fitosanitario)","https://www.agrocalidad.gob.ec/")
+};
+function reqRows(m){ const iso=m.iso3, eu=EU27.includes(iso), R=[];
+  if(eu){
+    R.push(["Arancel","Cacao en grano (1801): <b>0 %</b>. Ecuador además tiene acuerdo comercial con la UE desde el 1 de enero de 2017, con preferencias para otros productos. Para derivados y chocolate, revisa el arancel del código exacto.",SRC.euAgr+" · "+SRC.a2m]);
+    R.push(["Ley de deforestación (EUDR)","Obligatoria desde el <b>30 de diciembre de 2026</b> para empresas grandes y medianas, y desde el 30 de junio de 2027 para micro y pequeñas. Ecuador está clasificado como <b>riesgo estándar</b>: el comprador europeo hará la debida diligencia completa y pedirá la ubicación (geolocalización) de las fincas y pruebas de que no hubo deforestación después del 31 de diciembre de 2020. En mayo de 2026 la Comisión dijo que no habrá otro aplazamiento.",SRC.eudr+" · "+SRC.eudr2+" · "+SRC.risk]);
+    R.push(["Cadmio","No hay límite legal para el grano, pero sí para el producto final (Reglamento (UE) 2023/915): chocolate con leche hasta 30 % de cacao, 0,10 mg/kg; chocolate de 30 a 50 %, 0,30 mg/kg; chocolate de 50 % o más, 0,80 mg/kg; cacao en polvo, 0,60 mg/kg. Por eso los compradores piden análisis de cadmio del grano.",SRC.cd]);
+    R.push(["Plaguicidas","Los residuos deben cumplir los límites máximos de la UE para cacao.",SRC.pest]);
+  } else if(iso==="GBR"){
+    R.push(["Arancel","Cacao en grano (1801): <b>0 %</b>. Ecuador tiene acuerdo comercial con Reino Unido (Reino Unido–Andinos), útil para derivados; revisa el código exacto.",SRC.uk]);
+    R.push(["Cadmio","Reino Unido mantiene los mismos límites que la UE para chocolate y cacao en polvo.",SRC.cd]);
+    R.push(["Ley de deforestación","La EUDR de la UE no aplica en Reino Unido. Si la carga pasa por la UE para venderse allí, sí aplica.",SRC.eudr]);
+  } else if(iso==="USA"){
+    R.push(["Arancel","El arancel normal del cacao en grano (1801) es 0 %. Los aranceles adicionales cambiaron varias veces en 2025–2026: el cacao quedó exento de los aranceles \"recíprocos\" desde el 13 de noviembre de 2025, pero desde el 24 de julio de 2026 hay un arancel de la Sección 301 del 10 % para Ecuador con exenciones por producto. <b>Confirma con el agente de aduanas del comprador antes de cotizar.</b>",SRC.usag+" · "+SRC.ustar]);
+    R.push(["FDA","La planta exportadora debe estar registrada en la FDA. El importador envía el aviso previo (Prior Notice) y cumple el programa de verificación de proveedores (FSVP), así que pedirá documentos de inocuidad.",SRC.fda]);
+    R.push(["Sanidad vegetal","El USDA trata el grano como semilla: suele necesitar permiso de importación e inspección en puerto.",SRC.usimp]);
+  } else if(iso==="CHN"){
+    R.push(["Arancel","Acuerdo comercial Ecuador–China vigente desde el 1 de mayo de 2024. El cacao en polvo pasó de 15 % a 0 %. Para el grano y otros derivados, revisa el código exacto.",SRC.cnfta+" · "+SRC.macmap]);
+    R.push(["Registro en aduanas de China","Desde el 1 de junio de 2026 rige el Decreto 280. El grano sin tostar salió de esa lista y sigue las reglas de productos agrícolas primarios (Anuncio [2025] Nº 219). Los fabricantes de derivados y chocolate se registran directamente en el sistema CIFER.",SRC.cn]);
+  } else {
+    R.push(["Arancel","Consulta el arancel y las preferencias para Ecuador con el código HS exacto.",SRC.macmap]);
+  }
+  R.push(["Documentos de Ecuador","Certificado fitosanitario de Agrocalidad y certificado de origen (para usar la preferencia arancelaria del acuerdo, si existe).",SRC.agro]);
+  R.push(["Certificaciones","Orgánico, Fairtrade o Rainforest Alliance no son obligatorios por ley, pero muchos compradores los piden. Pregúntalo en el primer contacto.",""]);
+  return R; }
+const _vmrReq=viewMarketReal;
+viewMarketReal=function(){ let h=_vmrReq(); try{ const m=state.market; const R=reqRows(m);
+  h+=`<section><details><summary style="cursor:pointer"><h3 style="display:inline">Requisitos para exportar a ${esc(m.name)}</h3></summary>
+    <dl class="dl" style="margin-top:8px">${R.map(([k,v,src])=>`<dt>${k}</dt><dd>${v}${src?`<div class="src" style="margin-top:4px">Fuente: ${src}</div>`:""}</dd>`).join("")}</dl>
+    <p class="src">Revisado el ${REQ_DATE}. Las normas y aranceles cambian: confirma con el comprador o su agente de aduanas antes de cerrar una venta. No es asesoría legal.</p></details></section>`;
+  }catch(e){ console.error(e); } return h; };
 })();
