@@ -140,6 +140,7 @@ function aggregate(rows, idx, H){
 }
 /* Nombres que no son un comprador real (la aduana a veces registra el país o un texto genérico) */
 const LEGAL_WORDS=new Set("S A SA SAS SAC SAA SL SRL SPA LTD LTDA LIMITED LLC LLP INC CORP CO COMPANY GMBH AG KG BV NV PTE SDN BHD PLC PTY PVT OY OU AS AB TBK PT KK SAIC SAU SE C SEC CIA Y DE CV RL E I A V".split(" "));
+const slugId = t => normC(t).replace(/ /g,"-").slice(0,60)||"x";
 const EK_RE=/\beco kakao\b/; const PK_MIN=2000; /* precio por kg solo con al menos 2 t, para evitar muestras sueltas */
 const LOGISTICS=/natie\b|\b(steinweg|ceva|cwt|vollers|henry bath|access world|interporto|logika|genco|masstrans|dependable distribution|logistic|logistics|freight|shipping|warehousing|forwarding|airlines)\b/i;
 function badBuyer(nm){ const c=normC(nm); if(!c||c.length<3) return true;
@@ -276,11 +277,11 @@ function viewRanking(){
 function rankCompany(kind,i){
   const m=state.market, d=(PRIV[kind]||{})[m.iso3];
   if(kind==="procesadores"){ const ys=PRIV.meta_proc.years, y=ys[ys.length-1], f=d._top[i];
-    return {id:`${m.iso3}-P-${i}`, name:f.name, type:"procesador", city:m.name, what:`Cuota del mercado de chocolate en ${m.name}: ${fmt1(f.shares[y])} % en ${y} (${ys.map(yy=>f.shares[yy]!=null?yy+": "+fmt1(f.shares[yy])+" %":"").filter(Boolean).join(", ")}).`, source:"Euromonitor International", sourceDate:PRIV.meta_proc.exported}; }
+    return {id:`${m.iso3}-P-${slugId(f.name)}`, name:f.name, type:"procesador", city:m.name, what:`Cuota del mercado de chocolate en ${m.name}: ${fmt1(f.shares[y])} % en ${y} (${ys.map(yy=>f.shares[yy]!=null?yy+": "+fmt1(f.shares[yy])+" %":"").filter(Boolean).join(", ")}).`, source:"Euromonitor International", sourceDate:PRIV.meta_proc.exported}; }
   if(kind==="hq"){ const r=PRIV.importadores[m.iso3].hq.rows[i];
-    return {id:`${m.iso3}-H-${i}`, name:r.name, type:"importador", city:m.name, what:`Comprador de cacao ecuatoriano con sede en ${m.name} según su dirección en aduana; la mercancía se envía a ${r.dests.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"otro país"} (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")+".":""}`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:"Penta-Transaction (aduana de Ecuador, exportaciones)", sourceDate:`${r.from||PRIV.importadores[m.iso3].hq.from||""} a ${PRIV.importadores[m.iso3].hq.to||""}`}; }
+    return {id:`${m.iso3}-H-${slugId(r.name)}`, name:r.name, type:"importador", city:m.name, what:`Comprador de cacao ecuatoriano con sede en ${m.name} según su dirección en aduana; la mercancía se envía a ${r.dests.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"otro país"} (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")+".":""}`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:"Penta-Transaction (aduana de Ecuador, exportaciones)", sourceDate:`${r.from||PRIV.importadores[m.iso3].hq.from||""} a ${PRIV.importadores[m.iso3].hq.to||""}`}; }
   const r=d.rows[i];
-  return {pen:r, id:`${m.iso3}-I-${i}`, name:r.name, type:"importador", city:m.name, what:`${r.logistics?"Operador logístico o almacén: recibe la carga, pero el comprador final puede ser otra empresa. ":""}${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
+  return {pen:r, id:`${m.iso3}-I-${slugId(r.name)}`, name:r.name, type:"importador", city:m.name, what:`${r.logistics?"Operador logístico o almacén: recibe la carga, pero el comprador final puede ser otra empresa. ":""}${fmt1(r.share)} % de las importaciones del archivo (${r.ops} operaciones${r.usd?", USD "+fmtInt(r.usd):""}${r.kg?", "+fmtInt(r.kg/1000)+" t":""}). ${r.exporters&&r.exporters.length?"Exportadores ecuatorianos que le venden: "+r.exporters.map(o=>o.name+" "+fmt1(o.share)+" %").join(", "):"Orígenes: "+(r.origins.map(o=>o.name+" "+fmt1(o.share)+" %").join(", ")||"sin dato")}.`, hs:r.hs.length?r.hs.filter(h=>HS.some(x=>x.code===h)):undefined, source:d.mode==="ec_export"?"Penta-Transaction (aduana de Ecuador, exportaciones)":"Penta-Transaction", sourceDate:`${d.from||""} a ${d.to||""}`};
 }
 
 /* ---------- integración con la app ---------- */
@@ -656,4 +657,69 @@ function penCompanyBlock(r,m){
 }
 const _vcP=viewCompany;
 viewCompany=function(){ let h=_vcP(); try{ const c=state.company; if(c&&c.pen&&state.tab==="perfil"&&c.pen.prices){ const i=h.indexOf("</dl>"); const blk=penCompanyBlock(c.pen,state.market); h=i>=0?h.slice(0,i+5)+blk+h.slice(i+5):h+blk; } }catch(e){ console.error(e); } return h; };
+
+/* ===== Oportunidades compartidas por el equipo (se guardan en Cloudflare, no en el navegador) ===== */
+const STG=["Identificada","Investigando","Contactada","Muestra enviada","Oferta enviada","En negociación","Cliente","Descartada"];
+let PIPE_SYNC=false, PIPE_SNAP={}, PIPE_ERR="", pipeT=null, PIPE_LOADING=false;
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const meName=()=>{ try{ return localStorage.getItem("ek_me")||""; }catch(e){ return ""; } };
+const pipeKey=p=>JSON.stringify([p.stage,p.note||"",p.owner||"",p.next||"",p.last||"",(p.history||[]).length]);
+function pipeOverdue(){ const t=todayISO(); return pipeline.filter(p=>p.next&&p.next<=t&&!["Cliente","Descartada"].includes(p.stage)).length; }
+function pipeBadge(){ const el=document.getElementById("pipeCount"); if(!el) return; const n=pipeline.length, o=pipeOverdue();
+  el.textContent=n+(o?" · "+o+" hoy":""); el.style.background=o?"var(--cacao-red)":""; el.style.color=o?"#fff":""; el.title=o?o+" seguimientos vencidos o para hoy":""; }
+async function pipeLoad(){ if(!PW||PIPE_LOADING) return; PIPE_LOADING=true;
+  try{ const j=await apl("/pipe",{op:"list"}); const server=Object.fromEntries((j.items||[]).map(x=>[x.id,x]));
+    const up=pipeline.filter(p=>!p.isDemo&&!server[p.id]).map(p=>({...p,updated:p.updated||new Date().toISOString(),by:p.by||meName()}));
+    if(up.length){ const j2=await apl("/pipe",{op:"put",items:up}); for(const x of (j2.items||[])) server[x.id]=x; }
+    pipeline=Object.values(server).filter(x=>!x.deleted); PIPE_SNAP=Object.fromEntries(pipeline.map(p=>[p.id,pipeKey(p)])); PIPE_SYNC=true; PIPE_ERR="";
+    try{ localStorage.setItem("ek_pipeline",JSON.stringify(pipeline)); }catch(e){}
+  }catch(e){ PIPE_ERR=e.message; }
+  PIPE_LOADING=false; pipeBadge();
+  const pb=document.getElementById("pipeBody"); if($("#ppanel").classList.contains("open")&&!(pb&&pb.contains(document.activeElement))) renderPipe();
+  if(state.view==="company") render(); }
+async function pipePush(){ if(!PIPE_SYNC) return; const now=new Date().toISOString(), ids=new Set(pipeline.map(p=>p.id)), ch=[];
+  for(const p of pipeline){ if(PIPE_SNAP[p.id]!==pipeKey(p)){ p.updated=now; p.by=meName(); ch.push(p); } }
+  for(const id of Object.keys(PIPE_SNAP)) if(!ids.has(id)) ch.push({id,deleted:true,updated:now,by:meName()});
+  if(!ch.length) return;
+  try{ const j=await apl("/pipe",{op:"put",items:ch}); PIPE_ERR="";
+    const server=Object.fromEntries((j.items||[]).map(x=>[x.id,x])); const editing=document.getElementById("pipeBody")?.contains(document.activeElement);
+    if(!editing){ pipeline=Object.values(server).filter(x=>!x.deleted); }
+    PIPE_SNAP=Object.fromEntries(pipeline.map(p=>[p.id,pipeKey(p)]));
+  }catch(e){ PIPE_ERR="No se pudo guardar en el equipo: "+e.message+". Se reintentará."; clearTimeout(pipeT); pipeT=setTimeout(pipePush,15000); }
+  const st=document.getElementById("pipeSt"); if(st) st.innerHTML=pipeStatus(); pipeBadge(); }
+const _savePipe0=savePipe;
+savePipe=function(){ _savePipe0(); pipeBadge(); if(PIPE_SYNC){ clearTimeout(pipeT); pipeT=setTimeout(pipePush,800); } };
+function pipeStatus(){ return PIPE_ERR?`<span style="color:var(--cacao-red)">${esc(PIPE_ERR)}</span>`:PIPE_SYNC?`<span style="color:var(--cacao-green)">● Compartido con el equipo</span>`:PW?"Conectando…":"Solo en este navegador. Entra con la contraseña del equipo (pestaña Procesadores o Importadores) para compartir."; }
+renderPipe=function(){ const el=$("#pipeBody"); const t=todayISO();
+  const head=`<div class="notice info" id="pipeSt">${pipeStatus()}</div>
+    <label class="src" for="pipeMe"><b>Tu nombre</b> (aparece en el historial)</label><input id="pipeMe" class="pv-in" value="${esc(meName())}" placeholder="Ej.: Isabela" style="margin-bottom:10px">`;
+  if(!pipeline.length){ el.innerHTML=head+`<div><h2 style="font-size:30px">Sin oportunidades</h2><p class="empty">Abre una empresa y pulsa “Añadir a oportunidades”. Aquí todo el equipo verá la etapa, el responsable, la fecha del próximo seguimiento y las notas.</p></div>`; bindPipe(el); return; }
+  const rank=p=>p.stage==="Descartada"?3:p.stage==="Cliente"?2:(p.next&&p.next<=t)?0:1;
+  const list=[...pipeline].sort((a,b)=>rank(a)-rank(b)||(a.next||"9999").localeCompare(b.next||"9999")||a.name.localeCompare(b.name));
+  const cnt=STG.map(s=>[s,pipeline.filter(p=>p.stage===s).length]).filter(x=>x[1]);
+  el.innerHTML=head+`<div class="src" style="margin-bottom:8px">${cnt.map(([s,n])=>`${esc(s)}: <b>${n}</b>`).join(" · ")}</div><div class="pipe">${list.map(p=>{ const due=p.next&&p.next<=t&&rank(p)<2; const id=esc(p.id);
+    const stages=STG.includes(p.stage)?STG:[p.stage,...STG];
+    return `<div class="opp" style="${due?"outline:2px solid var(--cacao-red)":""}"><div class="opp-top"><div><div style="font-weight:600">${esc(p.name)}</div><div class="src" style="color:var(--muted)">${esc(p.market||"")} · ${esc((TYPES[p.type]||{}).label||p.type||"")}</div></div>
+      <select data-pf="stage" data-id="${id}" aria-label="Etapa">${stages.map(s=>`<option${s===p.stage?" selected":""}>${esc(s)}</option>`).join("")}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <label class="src">Responsable<input data-pf="owner" data-id="${id}" class="pv-in" value="${esc(p.owner||"")}" placeholder="Nombre"></label>
+        <label class="src">Último contacto<input type="date" data-pf="last" data-id="${id}" class="pv-in" value="${esc(p.last||"")}"></label>
+        <label class="src" style="${due?"color:var(--cacao-red)":""}">Próximo seguimiento${due?" · ¡hoy!":""}<input type="date" data-pf="next" data-id="${id}" class="pv-in" value="${esc(p.next||"")}"></label></div>
+      <textarea data-pf="note" data-id="${id}" placeholder="Notas de seguimiento (qué se habló, qué falta)">${esc(p.note||"")}</textarea>
+      ${(p.history||[]).length?`<details><summary class="src">Historial (${p.history.length})</summary>${[...p.history].reverse().slice(0,15).map(h=>`<div class="src">${esc(h.d)} · ${esc(h.s)}${h.by?" · "+esc(h.by):""}</div>`).join("")}</details>`:""}
+      <div class="src">${p.updated?`Actualizado ${esc(p.updated.slice(0,10))}${p.by?" por "+esc(p.by):""}`:""}</div>
+      <button class="linkbtn" data-pdel="${id}" style="align-self:flex-start">Quitar</button></div>`; }).join("")}</div>`;
+  bindPipe(el); };
+function bindPipe(el){ const find=id=>pipeline.find(p=>p.id===id);
+  const me=el.querySelector("#pipeMe"); if(me) me.oninput=()=>{ try{ localStorage.setItem("ek_me",me.value.trim()); }catch(e){} };
+  el.querySelectorAll("[data-pf]").forEach(x=>{ const ev=x.tagName==="TEXTAREA"||x.type==="text"||!x.type?"input":"change";
+    x.addEventListener(x.tagName==="SELECT"||x.type==="date"?"change":"input",()=>{ const p=find(x.dataset.id); if(!p) return; const f=x.dataset.pf;
+      if(f==="stage"&&p.stage!==x.value){ (p.history=p.history||[]).push({d:todayISO(),s:x.value,by:meName()}); if(p.history.length>40) p.history.shift(); if(["Contactada","Muestra enviada","Oferta enviada","En negociación"].includes(x.value)) p.last=todayISO(); }
+      p[f]=x.value; savePipe(); if(f==="stage"||f==="next") setTimeout(()=>{ if(!el.contains(document.activeElement)||f==="stage") renderPipe(); },50); }); });
+  el.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>{ if(!confirmDel(b)) return; pipeline=pipeline.filter(p=>p.id!==b.dataset.pdel); savePipe(); renderPipe(); if(state.view==="company") render(); }); }
+function confirmDel(b){ if(b.dataset.sure) return true; b.dataset.sure="1"; b.textContent="Pulsa otra vez para quitarla para todo el equipo"; setTimeout(()=>{ b.textContent="Quitar"; delete b.dataset.sure; },4000); return false; }
+/* conectar al entrar con la contraseña y refrescar cada minuto con el panel abierto */
+setInterval(()=>{ if(PW&&!PIPE_SYNC) pipeLoad(); else if(PIPE_SYNC&&$("#ppanel").classList.contains("open")&&!document.getElementById("pipeBody")?.contains(document.activeElement)) pipeLoad(); },60000);
+(function waitPw(n){ if(PW) pipeLoad(); else if(n<120) setTimeout(()=>waitPw(n+1),1000); })(0);
+pipeBadge();
 })();
