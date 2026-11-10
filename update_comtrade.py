@@ -284,6 +284,18 @@ def main():
     except Exception:
         previous, previous_selection = {}, None
 
+    # Respaldo: el robot se programa varios días (10 al 14) por si GitHub se salta una ejecución.
+    # Si este mes ya se actualizó a partir del día 10, no hace nada.
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
+        try:
+            g = datetime.datetime.strptime(prev_file.get("generated", "")[:10], "%Y-%m-%d").date()
+            t = datetime.date.today()
+            if (g.year, g.month) == (t.year, t.month) and g.day >= 10:
+                print("Ya actualizado este mes (" + g.isoformat() + "). Nada que hacer.")
+                return
+        except Exception:
+            pass
+
     this_year = datetime.date.today().year
     years = [this_year - 3, this_year - 2, this_year - 1]
     codes, info = reporter_codes()
