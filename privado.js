@@ -456,7 +456,7 @@ viewCompany = function(){
   return h;
 };
 function aplPerson(p, rv){
-  const mail = rv&&rv.emailStatus ? (rv.email?`<a href="mailto:${esc(rv.email)}" style="color:var(--cacao-yellow)">${esc(rv.email)}</a> <button class="ghost" data-copy="${esc(rv.email)}" style="padding:2px 8px;font-size:11px">Copiar</button>`:`<span style="color:var(--dim)">Apollo no tiene su email</span>`)
+  const mail = rv&&rv.emailStatus ? (rv.email?`<a href="mailto:${esc(rv.email)}" style="color:var(--cacao-yellow)">${esc(rv.email)}</a> <button class="ghost" data-copy="${esc(rv.email)}" style="padding:2px 8px;font-size:11px">Copiar</button> <a class="ghost" href="${esc(gmailLink(rv.email,{name:rv.name||p.name,title:rv.title||p.title}))}" target="_blank" rel="noopener" style="padding:2px 8px;font-size:11px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:inherit">Borrador en Gmail ↗</a>`:`<span style="color:var(--dim)">Apollo no tiene su email</span>`)
     : `<button class="cta" data-reveal="${esc(p.id)}" style="padding:7px 12px;font-size:13px">Revelar email <span style="font-size:11px;opacity:.8">· 1 crédito</span></button>`;
   let phone="";
   if(rv&&rv.emailStatus){
@@ -522,5 +522,32 @@ viewMarketReal=function(){
   h=h.replace(/(\d)\.(\d)%/g,"$1,$2 %");
   return h;
 };
+
+/* ===== Investigación y email por país (no solo Turquía) + borrador en Gmail ===== */
+const RS_TUR=RESEARCH_STEPS.slice();
+function stepsFor(m,c){ const q=encodeURIComponent((c&&c.name)||"");
+  if(m.iso3==="TUR") return RS_TUR;
+  return [["Web corporativa: productos, capacidad, certificaciones (orgánico, Fairtrade, Rainforest).",null],
+    ["Registro mercantil de "+m.name+": razón social exacta y dirección (búsqueda en OpenCorporates).","https://opencorporates.com/companies?q="+q],
+    ["Página de empresa en LinkedIn: tamaño y empleados en compras.","https://www.linkedin.com/search/results/companies/?keywords="+q],
+    ["Personas de compras: pestaña Contactos (Apollo).",null],
+    ["Compras de cacao ecuatoriano y a quién le compra: Importadores (Penta).",null],
+    ["Importaciones del país por código HS en UN Comtrade.","https://comtradeplus.un.org"],
+    ["Comparar con ITC Trade Map.","https://www.trademap.org"]]; }
+const _vc4=viewCompany;
+viewCompany=function(){ const m=state.market, c=state.company; if(m&&c) RESEARCH_STEPS.splice(0,RESEARCH_STEPS.length,...stepsFor(m,c));
+  let h=_vc4(); if(m&&c&&c.city===m.name){ h=h.split(esc(m.name)+", "+esc(m.name)).join(esc(m.name)); } return h; };
+draftEmail=function(co,ct){ const m=state.market||{}; const country=m.iso2?enName(m.iso2):"your market";
+  const grano = co.hs ? co.hs.includes("1801") : (co.type==="procesador"||co.type==="trader"||co.type==="importador");
+  const product = grano ? "cocoa beans" : "[cocoa product: liquor / butter / powder]";
+  const first = ((ct&&ct.name)||"").split(" ")[0]||"[First name]";
+  const subject = "Ecuadorian "+(grano?"cocoa beans":"cocoa products")+" for "+co.name;
+  const body = "Hi "+first+",\n\nI'm [Your name], International Sales at ECO-KAKAO, a cocoa company based in Ecuador.\n\n"+
+    "I noticed "+co.name+" works with "+(grano?"cocoa beans":"cocoa derivatives")+" in "+country+", and I thought there could be a good fit. We supply "+product+" with [key strength: traceability / certification / flavour profile] and can ship to "+country+" from [port].\n\n"+
+    (ct&&ct.level==="Influye"?"I'd be happy to send you our technical sheet and a sample for your lab.":"Would you be open to a short call next week to see if our cocoa could fit your sourcing plans? I can also send samples.")+
+    "\n\nBest regards,\n[Your name]\nInternational Sales · ECO-KAKAO\n[Phone] · [Website]";
+  return {subject,body}; };
+function gmailLink(email,person){ const d=draftEmail(state.company,{name:person&&person.name,level:/quality|calidad|lab|r&d|technical/i.test((person&&person.title)||"")?"Influye":"Decisor"});
+  return "https://mail.google.com/mail/?view=cm&fs=1&to="+encodeURIComponent(email)+"&su="+encodeURIComponent(d.subject)+"&body="+encodeURIComponent(d.body); }
 tryAutoUnlock();
 })();
