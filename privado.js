@@ -447,12 +447,13 @@ async function apl(path, body){
   const r=await fetch(APOLLO_URL.replace(/\/$/,"")+path,{method:"POST",headers:{"content-type":"application/json","x-team":await teamHash()},body:JSON.stringify(body||{})});
   const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||("Error "+r.status)); return j;
 }
-const aplOn = c => APOLLO_URL && PW && c && /Euromonitor|Penta/.test(c.source||"");
+const aplOn = c => APOLLO_URL && c && !c.isDemo;
 const _viewCompany3 = viewCompany;
 viewCompany = function(){
   let h=_viewCompany3(); const c=state.company; if(!aplOn(c)) return h;
   h=h.replace(/<section><h3>Contactos clave<\/h3>[\s\S]*?<\/section>/, `<section><h3>Contactos de compras</h3><p class="lead" style="margin:0 0 10px">Personas de compras y abastecimiento según Apollo. Ver la lista no gasta créditos.</p><button class="cta" data-tab="contactos">Ver personas <span>→</span></button></section>`);
-  if(state.tab==="contactos") h=h.replace(/(<div class="tabs" role="tablist">[\s\S]*?<\/div>)[\s\S]*$/, `$1<div id="apl"><p class="lead">Buscando personas en Apollo…</p></div>`);
+  if(state.tab==="contactos") h=h.replace(/(<div class="tabs" role="tablist">[\s\S]*?<\/div>)[\s\S]*$/, PW?`$1<div id="apl"><p class="lead">Buscando personas en Apollo…</p></div>`:`$1<div class="notice info">Para ver los contactos, entra con la <b>contraseña del equipo</b> (en Procesadores o Importadores).</div>`);
+  if(state.tab==="investigacion") h+=`<section><h3>Noticias recientes de la empresa</h3>${PW?'<div id="news"><p class="lead">Buscando noticias…</p></div>':'<div class="notice info">Entra con la contraseña del equipo para ver las noticias.</div>'}</section>`;
   return h;
 };
 function aplPerson(p, rv){
@@ -466,10 +467,27 @@ function aplPerson(p, rv){
     else phone=`<button class="ghost" data-rphone="${esc(p.id)}" style="padding:4px 10px;font-size:12px">Revelar número</button> <small style="color:var(--dim)">+8 créditos</small>`;
   }
   return `<div class="pv-row" style="border-bottom:1px solid var(--line);padding:12px 0">
-    <div style="font-weight:500">${esc(p.name)}${p.linkedin?` <a href="${esc(p.linkedin)}" target="_blank" rel="noopener" style="color:var(--muted);font-size:12px">LinkedIn ↗</a>`:""}</div>
+    <div style="font-weight:500">${esc((rv&&rv.name)||p.name)}${(rv&&rv.linkedin)||p.linkedin?` <a href="${esc((rv&&rv.linkedin)||p.linkedin)}" target="_blank" rel="noopener" style="color:var(--muted);font-size:12px">LinkedIn ↗</a> <a href="${esc(((rv&&rv.linkedin)||p.linkedin).replace(/\/$/,""))}/recent-activity/all/" target="_blank" rel="noopener" style="color:var(--muted);font-size:12px">Sus publicaciones ↗</a>`:""}</div>
     <div style="color:var(--muted);font-size:13px">${esc(p.title||"Cargo sin dato")}${p.city?" · "+esc(p.city):""}</div>
-    <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">${mail}${phone?`<div>${phone}</div>`:""}</div></div>`;
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">${mail}${phone?`<div>${phone}</div>`:""}</div>
+    ${rv&&rv.name?`<div data-pnews="${esc(rv.name)}" style="margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px">${pnewsHtml(rv.name)}</div>`:""}</div>`;
 }
+/* Lo que sale en internet de esta persona y su empresa (noticias públicas, sin créditos) */
+const PNEWS={};
+function pnewsKey(n){ return n+"|"+state.company.name; }
+function pnewsHtml(name){ const d=PNEWS[pnewsKey(name)], co=state.company.name;
+  const g=`<a href="https://www.google.com/search?q=${encodeURIComponent('"'+name+'" "'+co+'"')}" target="_blank" rel="noopener" style="color:var(--muted);font-size:12px">Buscar en Google ↗</a>`;
+  const head=`<div style="font-size:12px;color:var(--muted);margin-bottom:4px">En internet sobre ${esc(name.split(" ")[0])} y ${esc(co)}</div>`;
+  if(!d) return head+`<div class="src">Buscando…</div>`;
+  if(d.error) return head+`<div class="src">No se pudo buscar ahora. ${g}</div>`;
+  const it=(d.items||[]).slice(0,3);
+  if(!it.length) return head+`<div class="src">No hay noticias públicas que nombren a esta persona junto a la empresa. ${g}</div>`;
+  return head+it.map(n=>`<div style="padding:5px 0"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none;font-size:13px">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<div class="src">Fuente: Google News. Confirma que sea la misma persona. ${g}</div>`; }
+async function pnewsLoad(){ const m=state.market; if(!m||!state.company) return;
+  const es=["ESP","MEX","CHL","PER","COL","ARG","GTM","PAN","DOM","BOL","URY"].includes(m.iso3);
+  for(const el of document.querySelectorAll("[data-pnews]")){ const name=el.dataset.pnews, k=pnewsKey(name);
+    if(!PNEWS[k]){ try{ PNEWS[k]=await apl("/news",{company:state.company.name,person:name,lang:es?"es":"en"}); }catch(e){ PNEWS[k]={error:e.message}; } }
+    document.querySelectorAll("[data-pnews]").forEach(x=>{ if(x.dataset.pnews===name) x.innerHTML=pnewsHtml(name); }); } }
 function aplDraw(){
   const box=$("#apl"); if(!box) return; const c=state.company, k=c.name+"|"+state.market.iso2, d=APL[k];
   if(!d) return; if(d.error){ box.innerHTML=`<div class="notice">No se pudo consultar Apollo: ${esc(d.error)}</div>`; return; }
@@ -486,6 +504,7 @@ function aplDraw(){
   box.querySelectorAll("[data-reveal]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.reveal,false,b));
   box.querySelectorAll("[data-rphone]").forEach(b=>b.onclick=()=>aplReveal(b.dataset.rphone,true,b));
   box.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{ try{navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copiado";}catch(e){} });
+  pnewsLoad();
 }
 async function aplLoad(){
   const c=state.company, k=c.name+"|"+state.market.iso2;
@@ -505,7 +524,18 @@ let aplT; function aplPoll(){
   aplT=setTimeout(async()=>{ for(const [id] of pend){ try{ d.rv[id]=await apl("/contact",{id}); }catch(e){} } aplDraw(); aplPoll(); },20000);
 }
 const _bindPriv2 = bindPriv;
-bindPriv = function(){ _bindPriv2(); if($("#apl")) aplLoad(); };
+bindPriv = function(){ _bindPriv2(); if($("#apl")) aplLoad(); if($("#news")) newsLoad(); };
+const NEWS={};
+async function newsLoad(){ const c=state.company, m=state.market, k=c.name; const box=$("#news"); if(!box) return;
+  const es=["ESP","MEX","CHL","PER","COL","ARG","GTM","PAN","DOM","BOL","URY"].includes(m.iso3);
+  if(!NEWS[k]){ try{ NEWS[k]=await apl("/news",{company:c.name,lang:es?"es":"en"}); }catch(e){ NEWS[k]={error:e.message}; } }
+  const d=NEWS[k]; if(!$("#news")) return;
+  if(d.error){ $("#news").innerHTML=`<div class="notice">No se pudieron cargar noticias: ${esc(d.error)}</div>`; return; }
+  $("#news").innerHTML = (d.items&&d.items.length) ? d.items.map(n=>`<div style="padding:9px 0;border-bottom:1px solid var(--line)"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<p class="src">Fuente: Google News, búsqueda "${esc(d.q)}". Revisa que cada noticia sea de esta empresa: puede haber otras con nombre parecido.</p>`
+    : `<p class="lead">No hay noticias públicas recientes con el nombre "${esc(d.q)}".</p>`; }
+/* quitar oportunidades de prueba guardadas en este navegador */
+try{ const before=pipeline.length; pipeline=pipeline.filter(x=>!x.isDemo); if(pipeline.length!==before) savePipe(); }catch(e){}
+(function(){ const f=document.querySelector(".top .demo-flag"); if(f){ f.textContent="Datos reales"; f.title="Comercio exterior, procesadores, importadores y contactos con fuente"; f.style.background="var(--cacao-green)"; } })();
 
 /* ===== Ajustes de calidad en la vista de país ===== */
 const ISO32=Object.fromEntries("ABWAW,AFGAF,AGOAO,AIAAI,ALAAX,ALBAL,ANDAD,AREAE,ARGAR,ARMAM,ASMAS,ATAAQ,ATFTF,ATGAG,AUSAU,AUTAT,AZEAZ,BDIBI,BELBE,BENBJ,BESBQ,BFABF,BGDBD,BGRBG,BHRBH,BHSBS,BIHBA,BLMBL,BLRBY,BLZBZ,BMUBM,BOLBO,BRABR,BRBBB,BRNBN,BTNBT,BVTBV,BWABW,CAFCF,CANCA,CCKCC,CHECH,CHLCL,CHNCN,CIVCI,CMRCM,CODCD,COGCG,COKCK,COLCO,COMKM,CPVCV,CRICR,CUBCU,CUWCW,CXRCX,CYMKY,CYPCY,CZECZ,DEUDE,DJIDJ,DMADM,DNKDK,DOMDO,DZADZ,ECUEC,EGYEG,ERIER,ESHEH,ESPES,ESTEE,ETHET,FINFI,FJIFJ,FLKFK,FRAFR,FROFO,FSMFM,GABGA,GBRGB,GEOGE,GGYGG,GHAGH,GIBGI,GINGN,GLPGP,GMBGM,GNBGW,GNQGQ,GRCGR,GRDGD,GRLGL,GTMGT,GUFGF,GUMGU,GUYGY,HKGHK,HMDHM,HNDHN,HRVHR,HTIHT,HUNHU,IDNID,IMNIM,INDIN,IOTIO,IRLIE,IRNIR,IRQIQ,ISLIS,ISRIL,ITAIT,JAMJM,JEYJE,JORJO,JPNJP,KAZKZ,KENKE,KGZKG,KHMKH,KIRKI,KNAKN,KORKR,KWTKW,LAOLA,LBNLB,LBRLR,LBYLY,LCALC,LIELI,LKALK,LSOLS,LTULT,LUXLU,LVALV,MACMO,MAFMF,MARMA,MCOMC,MDAMD,MDGMG,MDVMV,MEXMX,MHLMH,MKDMK,MLIML,MLTMT,MMRMM,MNEME,MNGMN,MNPMP,MOZMZ,MRTMR,MSRMS,MTQMQ,MUSMU,MWIMW,MYSMY,MYTYT,NAMNA,NCLNC,NERNE,NFKNF,NGANG,NICNI,NIUNU,NLDNL,NORNO,NPLNP,NRUNR,NZLNZ,OMNOM,PAKPK,PANPA,PCNPN,PERPE,PHLPH,PLWPW,PNGPG,POLPL,PRIPR,PRKKP,PRTPT,PRYPY,PSEPS,PYFPF,QATQA,REURE,ROURO,RUSRU,RWARW,SAUSA,SDNSD,SENSN,SGPSG,SGSGS,SHNSH,SJMSJ,SLBSB,SLESL,SLVSV,SMRSM,SOMSO,SPMPM,SRBRS,SSDSS,STPST,SURSR,SVKSK,SVNSI,SWESE,SWZSZ,SXMSX,SYCSC,SYRSY,TCATC,TCDTD,TGOTG,THATH,TJKTJ,TKLTK,TKMTM,TLSTL,TONTO,TTOTT,TUNTN,TURTR,TUVTV,TWNTW,TZATZ,UGAUG,UKRUA,UMIUM,URYUY,USAUS,UZBUZ,VATVA,VCTVC,VENVE,VGBVG,VIRVI,VNMVN,VUTVU,WLFWF,WSMWS,YEMYE,ZAFZA,ZMBZM,ZWEZW".split(",").map(x=>[x.slice(0,3),x.slice(3)]));
