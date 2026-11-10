@@ -482,7 +482,7 @@ function pnewsHtml(name){ const d=PNEWS[pnewsKey(name)], co=state.company.name;
   if(d.error) return head+`<div class="src">No se pudo buscar ahora. ${g}</div>`;
   const it=(d.items||[]).slice(0,3);
   if(!it.length) return head+`<div class="src">No hay noticias públicas que nombren a esta persona junto a la empresa. ${g}</div>`;
-  return head+it.map(n=>`<div style="padding:5px 0"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none;font-size:13px">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<div class="src">Fuente: Google News. Confirma que sea la misma persona. ${g}</div>`; }
+  return head+it.map(n=>`<div style="padding:5px 0"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none;font-size:13px">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<div class="src">Fuente: ${esc(d.via||"noticias públicas")}. Confirma que sea la misma persona. ${g}</div>`; }
 async function pnewsLoad(){ const m=state.market; if(!m||!state.company) return;
   const es=["ESP","MEX","CHL","PER","COL","ARG","GTM","PAN","DOM","BOL","URY"].includes(m.iso3);
   for(const el of document.querySelectorAll("[data-pnews]")){ const name=el.dataset.pnews, k=pnewsKey(name);
@@ -531,7 +531,7 @@ async function newsLoad(){ const c=state.company, m=state.market, k=c.name; cons
   if(!NEWS[k]){ try{ NEWS[k]=await apl("/news",{company:c.name,lang:es?"es":"en"}); }catch(e){ NEWS[k]={error:e.message}; } }
   const d=NEWS[k]; if(!$("#news")) return;
   if(d.error){ $("#news").innerHTML=`<div class="notice">No se pudieron cargar noticias: ${esc(d.error)}</div>`; return; }
-  $("#news").innerHTML = (d.items&&d.items.length) ? d.items.map(n=>`<div style="padding:9px 0;border-bottom:1px solid var(--line)"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<p class="src">Fuente: Google News, búsqueda "${esc(d.q)}". Revisa que cada noticia sea de esta empresa: puede haber otras con nombre parecido.</p>`
+  $("#news").innerHTML = (d.items&&d.items.length) ? d.items.map(n=>`<div style="padding:9px 0;border-bottom:1px solid var(--line)"><a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:var(--fg);text-decoration:none">${esc(n.title)} ↗</a><div class="src">${esc(n.source||"")}${n.date?" · "+esc(new Date(n.date).toLocaleDateString("es-EC",{day:"numeric",month:"short",year:"numeric"})):""}</div></div>`).join("")+`<p class="src">Fuente: ${esc(d.via||"noticias públicas")}, búsqueda "${esc(d.q)}". Revisa que cada noticia sea de esta empresa: puede haber otras con nombre parecido.</p>`
     : `<p class="lead">No hay noticias públicas recientes con el nombre "${esc(d.q)}".</p>`; }
 /* quitar oportunidades de prueba guardadas en este navegador */
 try{ const before=pipeline.length; pipeline=pipeline.filter(x=>!x.isDemo); if(pipeline.length!==before) savePipe(); }catch(e){}
