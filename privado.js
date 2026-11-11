@@ -774,4 +774,55 @@ viewMarketReal=function(){ let h=_vmrReq(); try{ const m=state.market; const R=r
     <dl class="dl" style="margin-top:8px">${R.map(([k,v,src])=>`<dt>${k}</dt><dd>${v}${src?`<div class="src" style="margin-top:4px">Fuente: ${src}</div>`:""}</dd>`).join("")}</dl>
     <p class="src">Revisado el ${REQ_DATE}. Las normas y aranceles cambian: confirma con el comprador o su agente de aduanas antes de cerrar una venta. No es asesoría legal.</p></details></section>`;
   }catch(e){ console.error(e); } return h; };
+
+/* ===== Avisos de datos viejos (para que nadie trabaje con información desactualizada) ===== */
+const daysSince=d=>{ const t=Date.parse(String(d||"").slice(0,10)); return isNaN(t)?null:Math.floor((Date.now()-t)/864e5); };
+const _vrStale=viewRanking;
+viewRanking=function(){ let h=_vrStale(); try{ if(!PRIV) return h; const m=state.market;
+    let n=null, what="";
+    if(state.rkind==="importadores"){ const d=(PRIV.importadores||{})[m.iso3]||Object.values(PRIV.importadores||{})[0]; const a=d&&daysSince(d.loaded); if(a!=null&&a>45){ n=a; what="Penta (compradores y precios). Sube el Excel nuevo de Penta: Ecuador → Exportación → partidas 1801–1806 → últimos 12 meses."; } }
+    else { const a=PRIV.meta_proc&&daysSince(PRIV.meta_proc.loaded); if(a!=null&&a>400){ n=a; what="Euromonitor (procesadores). Sube el Excel nuevo de Euromonitor cuando salga la edición del año."; } }
+    if(n!=null){ let i=h.indexOf('<div class="filters">'); if(i<0) i=0; h=h.slice(0,i)+`<div class="notice" style="border-color:var(--cacao-red)"><b>Datos de hace ${n} días.</b> Toca actualizar ${what}</div>`+h.slice(i); }
+  }catch(e){ console.error(e); } return h; };
+const _vmrStale=viewMarketReal;
+viewMarketReal=function(){ let h=_vmrStale(); try{ const a=daysSince("2026-11-10"); if(a!=null&&a>180) h=h.replace("Revisado el "+REQ_DATE+".",`<b style="color:var(--cacao-red)">Revisado el ${REQ_DATE} (hace ${a} días): toca revisar estas normas otra vez.</b>`); }catch(e){} return h; };
+
+/* ===== Calendario de ferias de cacao y chocolate (fechas revisadas el 11 nov 2026) ===== */
+const FAIRS=[
+  {n:"Fi Europe (Food Ingredients Europe)",from:"2026-11-17",to:"2026-11-19",city:"Fráncfort",iso:"DEU",why:"Ingredientes: manteca, polvo y licor de cacao. El Import Promotion Desk lleva productores de Ecuador con reuniones B2B.",url:"https://www.importpromotiondesk.de/en/news-detail/food-ingredients-europe-fie-2026/"},
+  {n:"Winter FancyFaire",from:"2027-01-17",to:"2027-01-19",city:"San Francisco",iso:"USA",why:"Alimentos gourmet en EE. UU.: chocolate fino y de origen. Reemplaza al Winter Fancy Food Show.",url:"https://foodinstitute.com/press/specialty-food-association-announces-new-winter-fancyfaire-event/"},
+  {n:"ISM Cologne",from:"2027-01-31",to:"2027-02-03",city:"Colonia",iso:"DEU",why:"La feria de dulces y snacks más grande del mundo. Van fabricantes de chocolate de toda Europa; incluye ISM Ingredients.",url:"https://www.ism-cologne.com/pressreleases/pm_0020_2026_8_EN(GB).xml"},
+  {n:"BIOFACH",from:"2027-02-16",to:"2027-02-19",city:"Núremberg",iso:"DEU",why:"Feria mundial de productos orgánicos. Clave si se ofrece cacao orgánico certificado.",url:"https://www.liaa.gov.lv/en/event/cultivating-organic-growth-meet-us-latvia-national-pavilion-during-biofach-2027"},
+  {n:"Chocoa y Amsterdam Cocoa Week",from:"2027-02-15",to:"2027-02-21",city:"Ámsterdam",iso:"NLD",why:"Encuentro de cacao sostenible y fino: comerciantes, procesadores y chocolateros. Amsterdam es el mayor puerto de cacao del mundo. Confirmar los días exactos de la feria dentro de la semana.",url:"https://www.eventseye.com/fairs/f-chocoa-trade-show-amsterdam-21710-1.html"},
+  {n:"Gulfood",from:"2027-03-15",to:"2027-03-19",city:"Dubái",iso:"ARE",why:"Gran feria de alimentos de Medio Oriente, África y Asia del Sur.",url:"https://www.portugalglobal.pt/pt/noticias/2026/julho/feira-internacional-gulfood-2027/"},
+  {n:"Sweets & Snacks Expo",from:"2027-05-18",to:"2027-05-20",city:"Indianápolis",iso:"USA",why:"La principal feria de confitería de EE. UU. (fabricantes de chocolate y golosinas).",url:"https://sweetsandsnacks.com/?p=1842"},
+  {n:"Summer Fancy Food Show",from:"2027-07-25",to:"2027-07-27",city:"Nueva York",iso:"USA",why:"Alimentos gourmet; muchos chocolateros de origen y bean-to-bar.",url:"https://www.eventseye.com/fairs/f-summer-fancy-food-show-2607-1.html"},
+  {n:"Anuga",from:"2027-10-09",to:"2027-10-13",city:"Colonia",iso:"DEU",why:"Una de las dos ferias de alimentos más grandes del mundo (cada dos años). Compradores de todo el mundo.",url:"https://www.anuga.com/fair/anuga/date-and-opening-hours"},
+  {n:"Salon du Chocolat",from:"2027-10-28",to:"2027-11-01",city:"París",iso:"FRA",why:"El mayor evento de chocolate del mundo; tiene una zona B2B para profesionales. Inauguración el 27 de octubre.",url:"https://salon-du-chocolat.com/en/paris/practical-info/dates-access-map"}
+];
+const FAIRS_REVIEWED="11 nov 2026";
+function fairDate(f){ const o={day:"numeric",month:"short"}, a=new Date(f.from+"T12:00:00"), b=new Date(f.to+"T12:00:00");
+  return a.toLocaleDateString("es-EC",o)+" – "+b.toLocaleDateString("es-EC",{...o,year:"numeric"}); }
+function fairsHtml(iso){ const t=todayISO(); const list=FAIRS.filter(f=>f.to>=t&&(!iso||f.iso===iso)).sort((a,b)=>a.from.localeCompare(b.from));
+  if(!list.length) return iso?"":`<div class="notice" style="border-color:var(--cacao-red)"><b>El calendario ya pasó.</b> Toca cargar las ferias del próximo año.</div>`;
+  const last=FAIRS.map(f=>f.to).sort().pop(), soon=daysSince(last)!=null&&-daysSince(last)<90;
+  return list.map(f=>{ const d=-daysSince(f.from); const m=MARKETS.find(x=>x.iso3===f.iso);
+    return `<div class="opp" style="gap:4px"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(f.n)}</b><span class="src mono" style="white-space:nowrap">${d>0?"en "+d+" días":"ahora"}</span></div>
+      <div class="src">${esc(fairDate(f))} · ${esc(f.city)}, ${esc(m?m.name:f.iso)}</div><div style="font-size:13px">${esc(f.why)}</div>
+      <a class="src" href="${f.url}" target="_blank" rel="noopener" style="color:var(--cacao-yellow)">Fuente de las fechas ↗</a></div>`; }).join("")
+    +(iso?"":`<p class="src">Fechas revisadas el ${FAIRS_REVIEWED}; confírmalas en la web oficial antes de reservar.${soon?' <b style="color:var(--cacao-red)">Quedan menos de 3 meses del calendario: toca agregar las ferias del año siguiente.</b>':""}</p>`); }
+(function addFairsButton(){ try{
+  const bp=document.getElementById("btnPipe"); if(!bp||document.getElementById("btnFairs")) return;
+  const b=document.createElement("button"); b.className="tbtn"; b.id="btnFairs"; b.setAttribute("aria-label","Ver calendario de ferias"); b.innerHTML='▦ <span class="lbl">Ferias</span>';
+  bp.parentNode.insertBefore(b,bp);
+  const pp=document.getElementById("ppanel"), a=document.createElement("aside"); a.className="panel"; a.id="fpanel"; a.setAttribute("aria-label","Calendario de ferias");
+  a.innerHTML='<div class="p-head"><div class="crumbs"><span class="cur">Ferias de cacao y chocolate</span></div><button class="x" id="closeF" aria-label="Cerrar ferias">✕</button></div><div class="p-body" id="fairsBody"></div>';
+  pp.parentNode.insertBefore(a,pp.nextSibling);
+  b.onclick=()=>{ document.getElementById("fairsBody").innerHTML=`<p class="src" style="margin-top:0">Ferias donde se encuentran compradores de cacao: importadores, procesadores y chocolateros.</p><div class="pipe">${fairsHtml()}</div>`; closeSide("#mpanel"); closeSide("#ppanel"); a.classList.add("open"); };
+  document.getElementById("closeF").onclick=()=>a.classList.remove("open");
+  bp.addEventListener("click",()=>a.classList.remove("open"));
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") a.classList.remove("open"); });
+}catch(e){ console.error(e); } })();
+const _vmrFair=viewMarketReal;
+viewMarketReal=function(){ let h=_vmrFair(); try{ const f=fairsHtml(state.market.iso3); if(f) h+=`<section><h3>Ferias en ${esc(state.market.name)}</h3><div class="pipe">${f}</div></section>`; }catch(e){ console.error(e); } return h; };
 })();
