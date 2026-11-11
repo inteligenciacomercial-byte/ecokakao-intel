@@ -3,7 +3,7 @@
    - Solo se leen con la contraseña del equipo. La contraseña nunca está en el código.
    - "Subir Excel" lee el archivo en el navegador, actualiza, cifra y publica en GitHub. */
 (function(){
-const REPO = "rivadisa/ecokakao-intel", FILE = "private.enc.json";
+const REPO = "inteligenciacomercial-byte/ecokakao-intel", FILE = "private.enc.json";
 const SHEETJS = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 const EURO_NAMES = {"Turkey":"TUR","Netherlands":"NLD","Germany":"DEU","Belgium":"BEL","France":"FRA","Italy":"ITA","Spain":"ESP","United Kingdom":"GBR","Switzerland":"CHE","Poland":"POL","Estonia":"EST","Austria":"AUT","Czech Republic":"CZE","Sweden":"SWE","Denmark":"DNK","Finland":"FIN","Ireland":"IRL","Portugal":"PRT","Greece":"GRC","Ukraine":"UKR","Russia":"RUS","USA":"USA","Canada":"CAN","Mexico":"MEX","Brazil":"BRA","Argentina":"ARG","Colombia":"COL","Chile":"CHL","Japan":"JPN","China":"CHN","South Korea":"KOR","Malaysia":"MYS","Indonesia":"IDN","Singapore":"SGP","India":"IND","Australia":"AUS","Saudi Arabia":"SAU","United Arab Emirates":"ARE","Egypt":"EGY","South Africa":"ZAF"};
 let PRIV = null;            // datos descifrados {procesadores, importadores, volumen}
